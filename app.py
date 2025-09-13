@@ -1,35 +1,29 @@
-from flask import Flask, render_template, request, redirect, url_for, session, jsonify, flash
+from flask import Flask, render_template, request, redirect, url_for, session, flash
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
 import os
-import logging
-import re
-
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
-app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
+app.secret_key = 'your-secret-key-here'  # Change this to a random secret key
 
-# Configure database - Use SQLite for now to get the app running
-database_url = os.environ.get('DATABASE_URL', 'sqlite:///local.db')
+# Hardcoded PostgreSQL connection details
+DB_USER = 'red_db_user'
+DB_PASSWORD = '08PP2B2lSy2GAD5H7Jp51XRbrzldYOZB'
+DB_HOST = 'dpg-d32s8gur433s73bavsvg-a.oregon-postgres.render.com'
+DB_NAME = 'red_db'
 
-# If it's a PostgreSQL URL but we can't use it, fall back to SQLite
-if database_url and database_url.startswith('postgres'):
-    logger.warning("PostgreSQL detected but drivers not available. Falling back to SQLite.")
-    database_url = 'sqlite:///local.db'
-
-app.config['SQLALCHEMY_DATABASE_URI'] = database_url
+# Configure PostgreSQL database
+app.config['SQLALCHEMY_DATABASE_URI'] = f'postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}/{DB_NAME}'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
 
-# User model for admin login
+# User model
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
+    email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(120), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
@@ -39,50 +33,55 @@ class User(db.Model):
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
 
-# Data model for Kali information
-class KaliData(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
-    hostname = db.Column(db.String(100))
-    cpu_usage = db.Column(db.Float)
-    memory_usage = db.Column(db.Float)
-    disk_usage = db.Column(db.Float)
-    network_activity = db.Column(db.Float)
-    processes = db.Column(db.Integer)
-    logged_in_users = db.Column(db.Integer)
-    additional_info = db.Column(db.Text)
-
-# Create tables and admin user
-def initialize_database():
-    with app.app_context():
-        try:
-            db.create_all()
-            
-            # Create default admin user if not exists
-            if not User.query.filter_by(username='admin').first():
-                admin = User(username='admin')
-                admin.set_password('admin123')
-                db.session.add(admin)
-                db.session.commit()
-                logger.info("Default admin user created")
-                
-            logger.info("Database initialized successfully")
-            
-        except Exception as e:
-            logger.error(f"Database initialization failed: {str(e)}")
-
-# Initialize the database when the app starts
-initialize_database()
+# Initialize database
+@app.before_first_request
+def create_tables():
+    db.create_all()
 
 # Routes
 @app.route('/')
 def index():
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
+    if 'user_id' in session:
+        return redirect(url_for('dashboard'))
+    return redirect(url_for('login'))
+
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if request.method == 'POST':
+        username = request.form['username']
+        email = request.form['email']
+        password = request.form['password']
+        confirm_password = request.form['confirm_password']
+        
+        # Check if passwords match
+        if password != confirm_password:
+            flash('Passwords do not match!', 'error')
+            return render_template('register.html')
+        
+        # Check if user already exists
+        if User.query.filter_by(username=username).first():
+            flash('Username already exists!', 'error')
+            return render_template('register.html')
+        
+        if User.query.filter_by(email=email).first():
+            flash('Email already exists!', 'error')
+            return render_template('register.html')
+        
+        # Create new user
+        new_user = User(username=username, email=email)
+        new_user.set_password(password)
+        
+        try:
+            db.session.add(new_user)
+            db.session.commit()
+            flash('Registration successful! Please log in.', 'success')
+            return redirect(url_for('login'))
+        except Exception as e:
+            db.session.rollback()
+            flash('Error creating user. Please try again.', 'error')
+            return render_template('register.html')
     
-    # Get recent data for dashboard
-    recent_data = KaliData.query.order_by(KaliData.timestamp.desc()).limit(10).all()
-    return render_template('dashboard.html', data=recent_data)
+    return render_template('register.html')
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -96,11 +95,18 @@ def login():
             session['user_id'] = user.id
             session['username'] = user.username
             flash('Login successful!', 'success')
-            return redirect(url_for('index'))
+            return redirect(url_for('dashboard'))
         else:
             flash('Invalid username or password', 'error')
     
     return render_template('login.html')
+
+@app.route('/dashboard')
+def dashboard():
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    
+    return render_template('dashboard.html', username=session['username'])
 
 @app.route('/logout')
 def logout():
@@ -108,51 +114,5 @@ def logout():
     flash('You have been logged out', 'info')
     return redirect(url_for('login'))
 
-@app.route('/api/data', methods=['POST'])
-def receive_data():
-    # This endpoint will receive data from Kali Linux
-    try:
-        data = request.get_json()
-        
-        if not data:
-            return jsonify({'error': 'No data provided'}), 400
-        
-        # Create new data record
-        new_data = KaliData(
-            hostname=data.get('hostname'),
-            cpu_usage=data.get('cpu_usage'),
-            memory_usage=data.get('memory_usage'),
-            disk_usage=data.get('disk_usage'),
-            network_activity=data.get('network_activity'),
-            processes=data.get('processes'),
-            logged_in_users=data.get('logged_in_users'),
-            additional_info=data.get('additional_info')
-        )
-        
-        db.session.add(new_data)
-        db.session.commit()
-        
-        logger.info(f"Data received from {data.get('hostname', 'unknown')}")
-        return jsonify({'message': 'Data stored successfully'}), 200
-        
-    except Exception as e:
-        logger.error(f"Error storing data: {str(e)}")
-        return jsonify({'error': 'Failed to store data'}), 500
-
-@app.route('/api/health')
-def health_check():
-    return jsonify({'status': 'healthy', 'timestamp': datetime.utcnow().isoformat()})
-
-@app.route('/test-db')
-def test_db():
-    try:
-        # Try to query the database
-        user_count = User.query.count()
-        db_type = "SQLite" if "sqlite" in app.config['SQLALCHEMY_DATABASE_URI'] else "PostgreSQL"
-        return f'{db_type} database connection successful! Found {user_count} users.'
-    except Exception as e:
-        return f'Database connection failed: {str(e)}'
-
 if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port, debug=True)
+    app.run(debug=True)
