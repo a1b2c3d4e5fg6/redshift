@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, session, flash
+from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
@@ -32,6 +32,20 @@ class User(db.Model):
     
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
+
+# Network Traffic model - ADDED
+class NetworkTraffic(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    source = db.Column(db.String(255), nullable=False)
+    dest = db.Column(db.String(255), nullable=False)
+    protocol = db.Column(db.String(50), nullable=False)
+    service = db.Column(db.String(100))
+    content = db.Column(db.Text)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def __repr__(self):
+        return f'<NetworkTraffic {self.source} -> {self.dest} ({self.protocol})>'
 
 # Initialize database
 with app.app_context():
@@ -107,12 +121,70 @@ def login():
     
     return render_template('login.html')
 
+# Updated dashboard route - ADDED network traffic data
 @app.route('/dashboard')
 def dashboard():
     if 'user_id' not in session:
         return redirect(url_for('login'))
     
-    return render_template('dashboard.html', username=session['username'])
+    # Get the latest network traffic data
+    network_traffic = NetworkTraffic.query.order_by(NetworkTraffic.timestamp.desc()).limit(50).all()
+    
+    return render_template('dashboard.html', 
+                         username=session['username'], 
+                         network_traffic=network_traffic)
+
+# API endpoint for receiving network traffic - ADDED
+@app.route('/api/network-traffic', methods=['POST'])
+def receive_network_traffic():
+    try:
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+        
+        # Create new network traffic record
+        new_traffic = NetworkTraffic(
+            source=data.get('source'),
+            dest=data.get('dest'),
+            protocol=data.get('protocol'),
+            service=data.get('service'),
+            content=data.get('content')
+        )
+        
+        # If timestamp is provided, use it
+        if 'timestamp' in data:
+            new_traffic.timestamp = datetime.fromisoformat(data['timestamp'].replace('Z', '+00:00'))
+        
+        db.session.add(new_traffic)
+        db.session.commit()
+        
+        return jsonify({'message': 'Network traffic data stored successfully'}), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': f'Failed to store data: {str(e)}'}), 500
+
+# Route to add sample data for testing - ADDED
+@app.route('/add-sample-data')
+def add_sample_data():
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    
+    # Add some sample data for testing
+    sample_data = NetworkTraffic(
+        source="192.168.1.100",
+        dest="8.8.8.8",
+        protocol="TCP",
+        service="DNS",
+        content="Query: example.com"
+    )
+    
+    db.session.add(sample_data)
+    db.session.commit()
+    
+    flash('Sample data added successfully!', 'success')
+    return redirect(url_for('dashboard'))
 
 @app.route('/logout')
 def logout():
