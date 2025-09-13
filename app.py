@@ -1,11 +1,12 @@
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
 from flask_sqlalchemy import SQLAlchemy
+from flask_socketio import SocketIO, emit
 from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import datetime
+from datetime import datetime, timezone
 import os
 
 app = Flask(__name__)
-app.secret_key = 'your-secret-key-here'  # Change this to a random secret key
+app.secret_key = os.environ.get('SECRET_KEY', 'your-secret-key-change-in-production')
 
 # Hardcoded PostgreSQL connection details
 DB_USER = 'red_db_user'
@@ -18,6 +19,9 @@ app.config['SQLALCHEMY_DATABASE_URI'] = f'postgresql://{DB_USER}:{DB_PASSWORD}@{
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
+
+# Initialize SocketIO
+socketio = SocketIO(app, cors_allowed_origins="*")
 
 # User model
 class User(db.Model):
@@ -33,7 +37,7 @@ class User(db.Model):
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
 
-# Network Traffic model - ADDED
+# Network Traffic model
 class NetworkTraffic(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
@@ -44,8 +48,17 @@ class NetworkTraffic(db.Model):
     content = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
-    def __repr__(self):
-        return f'<NetworkTraffic {self.source} -> {self.dest} ({self.protocol})>'
+    def to_dict(self):
+        """Convert model to dictionary for JSON serialization"""
+        return {
+            'id': self.id,
+            'timestamp': self.timestamp.isoformat() + 'Z',
+            'source': self.source,
+            'dest': self.dest,
+            'protocol': self.protocol,
+            'service': self.service,
+            'content': self.content
+        }
 
 # Initialize database
 with app.app_context():
@@ -57,6 +70,16 @@ with app.app_context():
         admin.set_password('admin123')
         db.session.add(admin)
         db.session.commit()
+
+# SocketIO events
+@socketio.on('connect')
+def handle_connect():
+    print('Client connected')
+    emit('connected', {'data': 'Connected to server'})
+
+@socketio.on('disconnect')
+def handle_disconnect():
+    print('Client disconnected')
 
 # Routes
 @app.route('/')
@@ -121,7 +144,6 @@ def login():
     
     return render_template('login.html')
 
-# Updated dashboard route - ADDED network traffic data
 @app.route('/dashboard')
 def dashboard():
     if 'user_id' not in session:
@@ -134,7 +156,7 @@ def dashboard():
                          username=session['username'], 
                          network_traffic=network_traffic)
 
-# API endpoint for receiving network traffic - ADDED
+# API endpoint for receiving network traffic
 @app.route('/api/network-traffic', methods=['POST'])
 def receive_network_traffic():
     try:
@@ -159,32 +181,14 @@ def receive_network_traffic():
         db.session.add(new_traffic)
         db.session.commit()
         
+        # Emit the new data to all connected clients
+        socketio.emit('new_network_data', new_traffic.to_dict())
+        
         return jsonify({'message': 'Network traffic data stored successfully'}), 200
         
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': f'Failed to store data: {str(e)}'}), 500
-
-# Route to add sample data for testing - ADDED
-@app.route('/add-sample-data')
-def add_sample_data():
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
-    
-    # Add some sample data for testing
-    sample_data = NetworkTraffic(
-        source="192.168.1.100",
-        dest="8.8.8.8",
-        protocol="TCP",
-        service="DNS",
-        content="Query: example.com"
-    )
-    
-    db.session.add(sample_data)
-    db.session.commit()
-    
-    flash('Sample data added successfully!', 'success')
-    return redirect(url_for('dashboard'))
 
 @app.route('/logout')
 def logout():
@@ -193,4 +197,4 @@ def logout():
     return redirect(url_for('login'))
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    socketio.run(app, debug=True)
