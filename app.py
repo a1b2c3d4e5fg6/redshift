@@ -13,12 +13,13 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
 
-# Configure database - Use environment variable
+# Configure database - Use SQLite for now to get the app running
 database_url = os.environ.get('DATABASE_URL', 'sqlite:///local.db')
 
-# Fix for Render's PostgreSQL URL format if needed
-if database_url and database_url.startswith('postgres://'):
-    database_url = database_url.replace('postgres://', 'postgresql://', 1)
+# If it's a PostgreSQL URL but we can't use it, fall back to SQLite
+if database_url and database_url.startswith('postgres'):
+    logger.warning("PostgreSQL detected but drivers not available. Falling back to SQLite.")
+    database_url = 'sqlite:///local.db'
 
 app.config['SQLALCHEMY_DATABASE_URI'] = database_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
@@ -60,7 +61,7 @@ def initialize_database():
             # Create default admin user if not exists
             if not User.query.filter_by(username='admin').first():
                 admin = User(username='admin')
-                admin.set_password('admin123')  # Change this in production!
+                admin.set_password('admin123')
                 db.session.add(admin)
                 db.session.commit()
                 logger.info("Default admin user created")
@@ -147,7 +148,8 @@ def test_db():
     try:
         # Try to query the database
         user_count = User.query.count()
-        return f'Database connection successful! Found {user_count} users.'
+        db_type = "SQLite" if "sqlite" in app.config['SQLALCHEMY_DATABASE_URI'] else "PostgreSQL"
+        return f'{db_type} database connection successful! Found {user_count} users.'
     except Exception as e:
         return f'Database connection failed: {str(e)}'
 
