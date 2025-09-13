@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Live Event Dashboard</title>
+    <title>Kali Data Dashboard</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -114,6 +114,24 @@
             text-overflow: ellipsis;
             white-space: nowrap;
         }
+        .connection-status {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 5px;
+        }
+        .connected {
+            background-color: #28a745;
+        }
+        .disconnected {
+            background-color: #dc3545;
+        }
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+        }
     </style>
 </head>
 <body>
@@ -134,12 +152,16 @@
             {% endif %}
         {% endwith %}
 
+        <div class="status-indicator">
+            <span id="connection-status" class="connection-status disconnected"></span>
+            <span id="connection-text">Disconnected</span>
+        </div>
+
         <div class="action-buttons">
-            <a href="{{ url_for('add_sample_data') }}" class="btn btn-success">Add Sample Data</a>
             <a href="{{ url_for('dashboard') }}" class="btn">Refresh</a>
         </div>
 
-        <h2>Network Traffic</h2>
+        <h2>Network Traffic <span id="live-badge" style="background: #dc3545; color: white; padding: 2px 8px; border-radius: 12px; font-size: 12px; display: none;">LIVE</span></h2>
         {% if network_traffic %}
             <table class="data-table">
                 <thead>
@@ -152,7 +174,7 @@
                         <th>Content</th>
                     </tr>
                 </thead>
-                <tbody>
+                <tbody id="network-traffic-body">
                     {% for traffic in network_traffic %}
                     <tr>
                         <td>{{ traffic.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
@@ -168,9 +190,68 @@
         {% else %}
             <div class="no-data">
                 <h2>No network traffic data available</h2>
-                <p>Use the "Add Sample Data" button to add some sample data, or wait for data from your Kali machine.</p>
+                <p>Wait for data from your Kali machine.</p>
             </div>
         {% endif %}
     </div>
+
+    <!-- Include SocketIO client -->
+    <script src="https://cdn.socket.io/4.5.0/socket.io.min.js"></script>
+    <script>
+        // Connect to the server
+        const socket = io();
+        
+        // Update connection status
+        socket.on('connect', () => {
+            document.getElementById('connection-status').className = 'connection-status connected';
+            document.getElementById('connection-text').textContent = 'Connected';
+            document.getElementById('live-badge').style.display = 'inline';
+        });
+        
+        socket.on('disconnect', () => {
+            document.getElementById('connection-status').className = 'connection-status disconnected';
+            document.getElementById('connection-text').textContent = 'Disconnected';
+            document.getElementById('live-badge').style.display = 'none';
+        });
+        
+        // Handle new network data
+        socket.on('new_network_data', (data) => {
+            // Create a new row for the table
+            const tableBody = document.getElementById('network-traffic-body');
+            const newRow = document.createElement('tr');
+            
+            // Format the timestamp
+            const timestamp = new Date(data.timestamp);
+            const formattedTimestamp = timestamp.toLocaleString();
+            
+            newRow.innerHTML = `
+                <td>${formattedTimestamp}</td>
+                <td>${data.source}</td>
+                <td>${data.dest}</td>
+                <td>${data.protocol}</td>
+                <td>${data.service}</td>
+                <td class="content-cell">${data.content}</td>
+            `;
+            
+            // Add the new row at the top of the table
+            if (tableBody.firstChild) {
+                tableBody.insertBefore(newRow, tableBody.firstChild);
+            } else {
+                tableBody.appendChild(newRow);
+            }
+            
+            // Remove the "no data" message if it exists
+            const noData = document.querySelector('.no-data');
+            if (noData) {
+                noData.style.display = 'none';
+            }
+            
+            // Highlight the new row briefly
+            newRow.style.backgroundColor = '#e8f5e9';
+            setTimeout(() => {
+                newRow.style.backgroundColor = '';
+            }, 2000);
+        });
+    </script>
 </body>
 </html>
