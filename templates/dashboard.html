@@ -3,274 +3,396 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kali Data Dashboard</title>
+    <title>Enhanced Dashboard</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        /* Keep all your existing styles */
-        body {
-            font-family: Arial, sans-serif;
-            background: #f5f5f5;
+        :root {
+            --primary: #4361ee;
+            --secondary: #3f37c9;
+            --success: #4cc9f0;
+            --info: #4895ef;
+            --warning: #f72585;
+            --danger: #e63946;
+            --light: #f8f9fa;
+            --dark: #212529;
+            --gray: #6c757d;
+            --light-gray: #e9ecef;
+        }
+        
+        * {
             margin: 0;
             padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
-        .header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        
+        body {
+            background-color: #f5f7fb;
+            color: #333;
+            line-height: 1.6;
+        }
+        
+        .dashboard-container {
+            display: flex;
+            min-height: 100vh;
+        }
+        
+        /* Sidebar Styles */
+        .sidebar {
+            width: 250px;
+            background: var(--dark);
             color: white;
+            transition: all 0.3s ease;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.1);
+        }
+        
+        .sidebar-header {
             padding: 20px;
+            background: var(--primary);
+            text-align: center;
+        }
+        
+        .sidebar-menu {
+            padding: 20px 0;
+        }
+        
+        .sidebar-menu ul {
+            list-style: none;
+        }
+        
+        .sidebar-menu li {
+            padding: 10px 20px;
+            transition: all 0.3s;
+        }
+        
+        .sidebar-menu li:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+        
+        .sidebar-menu a {
+            color: #fff;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        /* Main Content Styles */
+        .main-content {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+        }
+        
+        .header {
             display: flex;
             justify-content: space-between;
             align-items: center;
+            margin-bottom: 30px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid var(--light-gray);
         }
-        .container {
-            max-width: 1400px;
-            margin: 20px auto;
-            padding: 0 20px;
-        }
-        /* ... keep all other styles ... */
         
-        /* Add styles for auto-update indicator */
-        .auto-update {
+        .page-title {
+            font-size: 24px;
+            font-weight: 600;
+            color: var(--dark);
+        }
+        
+        .user-info {
             display: flex;
             align-items: center;
-            margin-bottom: 10px;
+            gap: 10px;
         }
-        .update-indicator {
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-            margin-right: 8px;
+        
+        /* Card Styles */
+        .card-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
         }
-        .updating {
-            background-color: #28a745;
+        
+        .card {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
         }
-        .paused {
-            background-color: #dc3545;
+        
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 6px 15px rgba(0, 0, 0, 0.1);
+        }
+        
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        
+        .card-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--dark);
+        }
+        
+        .card-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+        }
+        
+        .card-content {
+            margin-top: 15px;
+        }
+        
+        /* Sensitive Data Styles */
+        .sensitive {
+            background-color: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 10px 15px;
+            border-radius: 4px;
+            margin: 10px 0;
+            position: relative;
+        }
+        
+        .sensitive-label {
+            position: absolute;
+            top: -8px;
+            right: 10px;
+            background: #ffc107;
+            color: #000;
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-weight: bold;
+        }
+        
+        .sensitive-data {
+            filter: blur(5px);
+            transition: filter 0.3s;
+            cursor: pointer;
+        }
+        
+        .sensitive-data:hover {
+            filter: none;
+        }
+        
+        /* Chart Container */
+        .chart-container {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+            margin-bottom: 30px;
+        }
+        
+        .chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        /* Table Styles */
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+        }
+        
+        .data-table th, .data-table td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid var(--light-gray);
+        }
+        
+        .data-table th {
+            background-color: var(--light);
+            font-weight: 600;
+        }
+        
+        .data-table tr:hover {
+            background-color: rgba(67, 97, 238, 0.05);
+        }
+        
+        /* Responsive Design */
+        @media (max-width: 992px) {
+            .card-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .dashboard-container {
+                flex-direction: column;
+            }
+            
+            .sidebar {
+                width: 100%;
+                height: auto;
+            }
+            
+            .card-grid {
+                grid-template-columns: 1fr;
+            }
         }
     </style>
 </head>
 <body>
-    <div class="header">
-        <h1>Kali Data Dashboard</h1>
-        <div>
-            <span>Welcome, {{ username }}!</span>
-            <a href="{{ url_for('logout') }}" class="btn btn-danger" style="margin-left: 15px;">Logout</a>
-        </div>
-    </div>
-
-    <div class="container">
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                {% for category, message in messages %}
-                    <div class="alert alert-{{ category }}">{{ message }}</div>
-                {% endfor %}
-            {% endif %}
-        {% endwith %}
-
-        <div class="auto-update">
-            <span id="update-indicator" class="update-indicator updating"></span>
-            <span id="update-status">Auto-update enabled (updates every 5 seconds)</span>
-            <button id="toggle-update" class="btn" style="margin-left: 15px;">Pause Updates</button>
+    <div class="dashboard-container">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <h2>Company Dashboard</h2>
+            </div>
+            <div class="sidebar-menu">
+                <ul>
+                    <li><a href="#"><i class="fas fa-home"></i> Dashboard</a></li>
+                    <li><a href="#"><i class="fas fa-chart-line"></i> Analytics</a></li>
+                    <li><a href="#"><i class="fas fa-users"></i> Users</a></li>
+                    <li><a href="#"><i class="fas fa-shopping-cart"></i> Orders</a></li>
+                    <li><a href="#"><i class="fas fa-cog"></i> Settings</a></li>
+                    <li><a href="#"><i class="fas fa-question-circle"></i> Help</a></li>
+                </ul>
+            </div>
         </div>
 
-        <div class="action-buttons">
-            <button id="refresh-btn" class="btn">Refresh Now</button>
-        </div>
+        <!-- Main Content -->
+        <div class="main-content">
+            <div class="header">
+                <h1 class="page-title">Dashboard Overview</h1>
+                <div class="user-info">
+                    <img src="https://ui-avatars.com/api/?name=User+Name&background=random" alt="User" style="width: 40px; height: 40px; border-radius: 50%;">
+                    <span>John Doe</span>
+                </div>
+            </div>
 
-        <h2>Network Traffic</h2>
-        <div id="network-traffic-container">
-            {% if network_traffic %}
+            <!-- Summary Cards -->
+            <div class="card-grid">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Total Revenue</h3>
+                        <div class="card-icon" style="background-color: var(--success);">
+                            <i class="fas fa-dollar-sign"></i>
+                        </div>
+                    </div>
+                    <div class="card-content">
+                        <h2>$24,569.00</h2>
+                        <p><span style="color: var(--success);">↑ 12.5%</span> from last month</p>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Users</h3>
+                        <div class="card-icon" style="background-color: var(--info);">
+                            <i class="fas fa-users"></i>
+                        </div>
+                    </div>
+                    <div class="card-content">
+                        <h2>2,458</h2>
+                        <p><span style="color: var(--success);">↑ 8.2%</span> from last month</p>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Conversion Rate</h3>
+                        <div class="card-icon" style="background-color: var(--warning);">
+                            <i class="fas fa-chart-pie"></i>
+                        </div>
+                    </div>
+                    <div class="card-content">
+                        <h2>4.73%</h2>
+                        <p><span style="color: var(--success);">↑ 1.8%</span> from last month</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Charts Section -->
+            <div class="chart-container">
+                <div class="chart-header">
+                    <h2>Performance Metrics</h2>
+                    <select style="padding: 8px; border-radius: 5px; border: 1px solid var(--light-gray);">
+                        <option>Last 7 Days</option>
+                        <option>Last 30 Days</option>
+                        <option>Last 90 Days</option>
+                    </select>
+                </div>
+                <div style="height: 300px; background: #f8f9fa; display: flex; align-items: center; justify-content: center; border-radius: 8px;">
+                    <p>[Chart Visualization Area]</p>
+                </div>
+            </div>
+
+            <!-- Data Section with Sensitive Information -->
+            <div class="chart-container">
+                <h2 style="margin-bottom: 20px;">User Data</h2>
+                
+                <div class="sensitive">
+                    <span class="sensitive-label">SENSITIVE</span>
+                    <h3>Personal Information</h3>
+                    <p><strong>Email:</strong> <span class="sensitive-data">john.doe@example.com</span></p>
+                    <p><strong>Phone:</strong> <span class="sensitive-data">+1 (555) 123-4567</span></p>
+                    <p><strong>Address:</strong> <span class="sensitive-data">123 Main St, Anytown, USA</span></p>
+                </div>
+                
                 <table class="data-table">
                     <thead>
                         <tr>
-                            <th>Timestamp</th>
-                            <th>Source</th>
-                            <th>Destination</th>
-                            <th>Protocol</th>
-                            <th>Service</th>
-                            <th>Content</th>
+                            <th>ID</th>
+                            <th>Name</th>
+                            <th>Email</th>
+                            <th>Status</th>
+                            <th>Value</th>
                         </tr>
                     </thead>
-                    <tbody id="network-traffic-body">
-                        {% for traffic in network_traffic %}
+                    <tbody>
                         <tr>
-                            <td>{{ traffic.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
-                            <td>{{ traffic.source }}</td>
-                            <td>{{ traffic.dest }}</td>
-                            <td>{{ traffic.protocol }}</td>
-                            <td>{{ traffic.service }}</td>
-                            <td class="content-cell">
-                                {% if traffic.content %}
-                                    {% if traffic.content|length > 100 %}
-                                        {{ traffic.content[:100] }}...
-                                        <span class="view-content-link" onclick="showPacketContent('{{ traffic.content | replace("'", "\\'") | replace('"', '\\"') }}')">View full content</span>
-                                    {% else %}
-                                        {{ traffic.content }}
-                                    {% endif %}
-                                {% else %}
-                                    No content
-                                {% endif %}
-                            </td>
+                            <td>1</td>
+                            <td>John Smith</td>
+                            <td class="sensitive-data">john.smith@example.com</td>
+                            <td><span style="color: var(--success);">Active</span></td>
+                            <td>$2,450</td>
                         </tr>
-                        {% endfor %}
+                        <tr>
+                            <td>2</td>
+                            <td>Sarah Johnson</td>
+                            <td class="sensitive-data">sarahj@example.com</td>
+                            <td><span style="color: var(--success);">Active</span></td>
+                            <td>$1,890</td>
+                        </tr>
+                        <tr>
+                            <td>3</td>
+                            <td>Michael Brown</td>
+                            <td class="sensitive-data">m.brown@example.com</td>
+                            <td><span style="color: var(--danger);">Inactive</span></td>
+                            <td>$3,250</td>
+                        </tr>
                     </tbody>
                 </table>
-            {% else %}
-                <div class="no-data">
-                    <h2>No network traffic data available</h2>
-                    <p>Wait for data from your Kali machine.</p>
-                </div>
-            {% endif %}
-        </div>
-    </div>
-
-    <!-- Packet Content Modal -->
-    <div id="packetModal" class="modal">
-        <div class="modal-content">
-            <span class="close" onclick="closeModal()">&times;</span>
-            <h3>Packet Content Details</h3>
-            <div class="packet-details" id="modal-content"></div>
+            </div>
         </div>
     </div>
 
     <script>
-        let autoUpdateEnabled = true;
-        let updateInterval;
-        
-        // Function to fetch latest data
-        function fetchLatestData() {
-            fetch('/api/network-traffic/latest')
-                .then(response => response.json())
-                .then(data => {
-                    updateTable(data);
-                })
-                .catch(error => {
-                    console.error('Error fetching data:', error);
-                });
-        }
-        
-        // Function to update the table with new data
-        function updateTable(data) {
-            const tableBody = document.getElementById('network-traffic-body');
-            
-            if (data.length === 0) {
-                // Show no data message
-                document.getElementById('network-traffic-container').innerHTML = `
-                    <div class="no-data">
-                        <h2>No network traffic data available</h2>
-                        <p>Wait for data from your Kali machine.</p>
-                    </div>
-                `;
-                return;
-            }
-            
-            // Create new table if it doesn't exist
-            if (!tableBody) {
-                document.getElementById('network-traffic-container').innerHTML = `
-                    <table class="data-table">
-                        <thead>
-                            <tr>
-                                <th>Timestamp</th>
-                                <th>Source</th>
-                                <th>Destination</th>
-                                <th>Protocol</th>
-                                <th>Service</th>
-                                <th>Content</th>
-                            </tr>
-                        </thead>
-                        <tbody id="network-traffic-body"></tbody>
-                    </table>
-                `;
-            }
-            
-            // Clear existing table body
-            const newTableBody = document.getElementById('network-traffic-body');
-            newTableBody.innerHTML = '';
-            
-            // Add new rows
-            data.forEach(traffic => {
-                const row = document.createElement('tr');
-                
-                // Format timestamp
-                const timestamp = new Date(traffic.timestamp);
-                const formattedTimestamp = timestamp.toLocaleString();
-                
-                // Create content cell
-                let contentCell = 'No content';
-                if (traffic.content) {
-                    if (traffic.content.length > 100) {
-                        contentCell = `${traffic.content.substring(0, 100)}... <span class="view-content-link" onclick="showPacketContent('${traffic.content.replace(/'/g, "\\'").replace(/"/g, '\\"')}')">View full content</span>`;
-                    } else {
-                        contentCell = traffic.content;
-                    }
-                }
-                
-                row.innerHTML = `
-                    <td>${formattedTimestamp}</td>
-                    <td>${traffic.source}</td>
-                    <td>${traffic.dest}</td>
-                    <td>${traffic.protocol}</td>
-                    <td>${traffic.service || ''}</td>
-                    <td class="content-cell">${contentCell}</td>
-                `;
-                
-                newTableBody.appendChild(row);
+        // Simple functionality to toggle sensitive data visibility
+        document.querySelectorAll('.sensitive-data').forEach(item => {
+            item.addEventListener('click', function() {
+                this.style.filter = this.style.filter === 'none' ? 'blur(5px)' : 'none';
             });
-        }
-        
-        // Function to toggle auto-update
-        function toggleAutoUpdate() {
-            autoUpdateEnabled = !autoUpdateEnabled;
-            
-            const indicator = document.getElementById('update-indicator');
-            const status = document.getElementById('update-status');
-            const button = document.getElementById('toggle-update');
-            
-            if (autoUpdateEnabled) {
-                indicator.className = 'update-indicator updating';
-                status.textContent = 'Auto-update enabled (updates every 5 seconds)';
-                button.textContent = 'Pause Updates';
-                startAutoUpdate();
-            } else {
-                indicator.className = 'update-indicator paused';
-                status.textContent = 'Auto-update paused';
-                button.textContent = 'Resume Updates';
-                clearInterval(updateInterval);
-            }
-        }
-        
-        // Function to start auto-update
-        function startAutoUpdate() {
-            if (updateInterval) {
-                clearInterval(updateInterval);
-            }
-            
-            updateInterval = setInterval(fetchLatestData, 5000); // Update every 5 seconds
-        }
-        
-        // Modal functions
-        function showPacketContent(content) {
-            const modal = document.getElementById('packetModal');
-            document.getElementById('modal-content').textContent = content;
-            modal.style.display = 'block';
-        }
-        
-        function closeModal() {
-            document.getElementById('packetModal').style.display = 'none';
-        }
-        
-        // Event listeners
-        document.getElementById('toggle-update').addEventListener('click', toggleAutoUpdate);
-        document.getElementById('refresh-btn').addEventListener('click', fetchLatestData);
-        
-        // Close modal when clicking outside of it
-        window.onclick = function(event) {
-            const modal = document.getElementById('packetModal');
-            if (event.target == modal) {
-                closeModal();
-            }
-        }
-        
-        // Start auto-update when page loads
-        startAutoUpdate();
+        });
     </script>
 </body>
 </html>
