@@ -23,8 +23,14 @@ body { font-family: Arial, sans-serif; background: #f5f5f5; margin:0; padding:0;
 .preview { color:#333; }
 
 /* Colors for unread/ clicked rows */
-.unread { background-color: #c8f7c5 !important; }   /* green for not-clicked */
-.clicked { background-color: #ffffff !important; }  /* white for clicked */
+/* unread => newly-arrived rows (red) */
+.unread {
+  background-color: #f8d7da !important; /* light red background */
+  color: #721c24 !important;            /* dark red text for contrast */
+}
+.clicked {
+  background-color: #ffffff !important; /* clicked/inspected row stays white */
+}
 
 /* Banner showing new interceptions */
 .new-banner {
