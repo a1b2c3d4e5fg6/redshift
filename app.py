@@ -11,11 +11,11 @@ app.secret_key = 'your-secret-key-here'  # Change this to a random secret key
 # Hardcoded PostgreSQL connection details
 DB_USER = 'red_db_user'
 DB_PASSWORD = '08PP2B2lSy2GAD5H7Jp51XRbrzldYOZB'
-DB_HOST = 'dpg-cp3f8v6v2p9s73foknq0-a.oregon-postgres.render.com'
-DB_NAME = 'red_db_3p6a'
+DB_HOST = 'dpg-d32s8gur433s73bavsvg-a.oregon-postgres.render.com'
+DB_NAME = 'red_db'
 
-# Configure PostgreSQL database
-app.config['SQLALCHEMY_DATABASE_URI'] = f'postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}/{DB_NAME}'
+# Configure PostgreSQL database with pg8000 dialect
+app.config['SQLALCHEMY_DATABASE_URI'] = f'postgresql+pg8000://{DB_USER}:{DB_PASSWORD}@{DB_HOST}/{DB_NAME}'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
