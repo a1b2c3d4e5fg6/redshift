@@ -27,10 +27,11 @@
     .view-content-link{ color:#0b63ff; text-decoration:underline; cursor:pointer; margin-left:8px; font-weight:600; }
     .open-window-link{ color:#0b63ff; text-decoration:underline; cursor:pointer; margin-left:10px; font-weight:600; font-size:0.95em; }
     .preview{ color:#333; }
-    /* highlight for newest row */
-    .new-traffic { background-color: #dff6e1 !important; transition: background-color 0.4s ease; }
-    /* toast */
-    .toast { position: fixed; right: 24px; top: 24px; background: rgba(0,0,0,0.85); color: #fff; padding: 10px 14px; border-radius: 8px; z-index: 2000; box-shadow: 0 6px 20px rgba(0,0,0,0.2); }
+
+    /* Colors for new/old rows per your request */
+    .new-traffic { background-color: #c8f7c5 !important; }   /* brighter green for newest */
+    .old-traffic { background-color: #d7c0a6 !important; }   /* brown-ish for previous rows */
+
     @media (max-width:800px) { .data-table th,.data-table td{ padding:8px 10px; font-size:13px; } }
   </style>
 </head>
@@ -131,36 +132,46 @@
   </div>
 
   <script>
-    // Last-seen packet id (initially taken from server-side data if available)
+    // lastSeenId from server initial data (null if none)
     let lastSeenId = {{ (network_traffic[0].id if network_traffic else 'null')|tojson }};
-    let highlightedRow = null;
     let autoUpdateEnabled = true;
     let updateInterval = null;
 
-    // Toast helper
-    function showToast(text, duration = 4000) {
-      const t = document.createElement('div');
-      t.className = 'toast';
-      t.textContent = text;
-      document.body.appendChild(t);
-      setTimeout(() => { t.style.opacity = '0'; setTimeout(()=>t.remove(), 400); }, duration);
+    // Audio beep using Web Audio API (short beep)
+    function playBeep(duration = 120, frequency = 880, volume = 0.08) {
+      try {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        const ctx = new AudioContext();
+        const o = ctx.createOscillator();
+        const g = ctx.createGain();
+        o.type = "sine";
+        o.frequency.value = frequency;
+        g.gain.value = volume;
+        o.connect(g);
+        g.connect(ctx.destination);
+        o.start();
+        setTimeout(() => {
+          o.stop();
+          // close context after short delay
+          setTimeout(() => ctx.close(), 50);
+        }, duration);
+      } catch (e) {
+        // fallback: do nothing if WebAudio not available
+        console.warn('Beep failed:', e);
+      }
     }
 
     // Safe parse of server JSON-encoded string (tojson used server side)
     function safeParseContent(raw) {
       if (raw === null || raw === undefined) return '';
       try {
-        // raw is likely a JSON string: JSON.parse will return the original string with newlines preserved
         if (typeof raw === 'string') {
           return JSON.parse(raw);
         }
-      } catch (e) {
-        // fallback
-      }
+      } catch(e) { /* fallback */ }
       return raw;
     }
 
-    // Show content in modal (safe)
     function showModalWithContent(str) {
       const modal = document.getElementById('packetModal');
       const cnt = document.getElementById('modal-content');
@@ -168,15 +179,12 @@
       modal.style.display = 'block';
     }
 
-    // Open content in new browser window (user-initiated click, so popup allowed)
     function openContentInWindow(str) {
       const w = window.open('', '_blank');
       if (!w) {
-        // popup blocked; fallback to modal
         showModalWithContent(str);
         return;
       }
-      // write a minimal page that preserves whitespace
       const esc = (s) => s.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');
       const contentHtml = `<pre style="white-space:pre-wrap;font-family:monospace;">${esc(str)}</pre>`;
       w.document.open();
@@ -184,17 +192,15 @@
       w.document.close();
     }
 
-    // Event delegation for clicks on view/open links
+    // Delegated click handler for view/open links
     document.addEventListener('click', function(e) {
       const el = e.target;
       if (!el) return;
-
       if (el.classList && el.classList.contains('view-content-link')) {
         const raw = el.getAttribute('data-content');
         const content = safeParseContent(raw);
         showModalWithContent(content);
       }
-
       if (el.classList && el.classList.contains('open-window-link')) {
         const raw = el.getAttribute('data-content');
         const content = safeParseContent(raw);
@@ -202,7 +208,7 @@
       }
     });
 
-    // Close modal handlers
+    // Close modal
     document.getElementById('modal-close').addEventListener('click', () => {
       document.getElementById('packetModal').style.display = 'none';
     });
@@ -211,7 +217,41 @@
       if (event.target === modal) modal.style.display = 'none';
     });
 
-    // Build or refresh table rows safely
+    // highlight handling: make previous rows brown and new row green
+    function markRowsForNew(newId) {
+      // remove existing classes first
+      document.querySelectorAll('#network-traffic-body tr').forEach(tr => {
+        tr.classList.remove('new-traffic');
+        tr.classList.remove('old-traffic');
+      });
+
+      // mark all rows except the newest as old (brown)
+      document.querySelectorAll('#network-traffic-body tr').forEach(tr => {
+        const id = tr.getAttribute('data-id');
+        if (!id) return;
+        if (String(id) !== String(newId)) {
+          tr.classList.add('old-traffic');
+        }
+      });
+
+      // mark the newest row as new (green)
+      const newest = document.querySelector(`#network-traffic-body tr[data-id="${newId}"]`);
+      if (newest) newest.classList.add('new-traffic');
+    }
+
+    // Called when a new packet arrives (first element id changed)
+    function notifyNewPacket(newId) {
+      // play sound only if lastSeenId is set (not initial load)
+      if (lastSeenId !== null) {
+        playBeep(); // sound alert
+      }
+      // mark rows colors
+      markRowsForNew(newId);
+      // update lastSeenId
+      lastSeenId = Number(newId);
+    }
+
+    // Build / refresh table
     function updateTable(data) {
       const container = document.getElementById('network-traffic-container');
       if (!data || data.length === 0) {
@@ -219,44 +259,44 @@
         return;
       }
 
-      // Ensure table is present
+      // Ensure table present
       if (!document.getElementById('network-traffic-body')) {
         container.innerHTML = `
           <table class="data-table" id="network-table">
             <thead>
-              <tr>
-                <th>Timestamp</th><th>Source</th><th>Destination</th><th>Protocol</th><th>Content (preview)</th><th>Service</th>
-              </tr>
+              <tr><th>Timestamp</th><th>Source</th><th>Destination</th><th>Protocol</th><th>Content (preview)</th><th>Service</th></tr>
             </thead>
             <tbody id="network-traffic-body"></tbody>
-          </table>
-        `;
+          </table>`;
       }
 
       const tbody = document.getElementById('network-traffic-body');
       tbody.innerHTML = '';
 
-      data.forEach((traffic, idx) => {
+      data.forEach(traffic => {
         const tr = document.createElement('tr');
-        // store id for detection
         if (traffic.id !== undefined && traffic.id !== null) tr.setAttribute('data-id', traffic.id);
 
-        // Timestamp
         const tdTime = document.createElement('td');
         tdTime.textContent = (typeof traffic.timestamp === 'string') ? traffic.timestamp : (traffic.timestamp ? new Date(traffic.timestamp).toLocaleString() : '');
         tr.appendChild(tdTime);
 
-        // Source
         const tdSource = document.createElement('td'); tdSource.textContent = traffic.source || ''; tr.appendChild(tdSource);
-        // Dest
         const tdDest = document.createElement('td'); tdDest.textContent = traffic.dest || ''; tr.appendChild(tdDest);
-        // Protocol
         const tdProto = document.createElement('td'); tdProto.textContent = traffic.protocol || ''; tr.appendChild(tdProto);
 
-        // Content (5th)
         const tdContent = document.createElement('td'); tdContent.className = 'content-cell';
         if (traffic.content) {
-          const contentStr = (typeof traffic.content === 'string') ? traffic.content : JSON.stringify(traffic.content);
+          // traffic.content is expected to be the whole packet content (or base64 string)
+          let contentStr;
+          try {
+            // If content is base64 (detect typical base64 characters), we won't auto-decode here;
+            // we display what server returned (server should send base64 or text consistently).
+            contentStr = (typeof traffic.content === 'string') ? traffic.content : JSON.stringify(traffic.content);
+          } catch (e) {
+            contentStr = String(traffic.content);
+          }
+
           if (contentStr.length > 100) {
             const preview = document.createElement('span'); preview.className = 'preview'; preview.textContent = contentStr.substring(0,100) + '...'; tdContent.appendChild(preview);
             const viewLink = document.createElement('span'); viewLink.className = 'view-content-link'; viewLink.setAttribute('data-content', JSON.stringify(contentStr)); viewLink.textContent = 'View full content'; tdContent.appendChild(viewLink);
@@ -270,48 +310,21 @@
         }
         tr.appendChild(tdContent);
 
-        // Service
         const tdService = document.createElement('td'); tdService.textContent = traffic.service || ''; tr.appendChild(tdService);
 
         tbody.appendChild(tr);
       });
 
-      // Detect new top item (first element)
+      // Check for new top item
       const first = data[0];
       const firstId = first && first.id ? Number(first.id) : null;
       if (lastSeenId === null) {
-        // initial load: set lastSeenId but don't alert
+        // initial load: set lastSeenId but don't play sound
         lastSeenId = firstId;
-        // highlight the current top row as the newest (optional)
-        highlightRowById(firstId);
+        markRowsForNew(firstId); // highlight initial top
       } else if (firstId !== null && firstId !== lastSeenId) {
-        // new packet(s) arrived
         notifyNewPacket(firstId);
       }
-    }
-
-    // highlight a row by data-id and remove highlight from previous
-    function highlightRowById(id) {
-      try {
-        if (highlightedRow) highlightedRow.classList.remove('new-traffic');
-      } catch(e){}
-      highlightedRow = document.querySelector(`tr[data-id="${id}"]`);
-      if (highlightedRow) highlightedRow.classList.add('new-traffic');
-    }
-
-    // notify user + toast + highlight
-    function notifyNewPacket(newId) {
-      // Browser alert (explicit requirement)
-      try { alert('New packet intercepted!'); } catch(e) {}
-
-      // Small toast (non-blocking)
-      showToast('New packet intercepted');
-
-      // Update highlight
-      highlightRowById(newId);
-
-      // Update lastSeenId
-      lastSeenId = Number(newId);
     }
 
     // Fetch latest data from server
@@ -319,10 +332,9 @@
       fetch('/api/network-traffic/latest')
         .then(resp => resp.json())
         .then(data => {
-          // data expected as array of objects with .id, .timestamp, .source, .dest, .protocol, .service, .content
           updateTable(data);
         })
-        .catch(err => { console.error('fetch error', err); });
+        .catch(err => console.error('fetch error', err));
     }
 
     // Auto-update controls
@@ -340,9 +352,8 @@
 
     document.getElementById('refresh-btn').addEventListener('click', fetchLatestData);
 
-    // initialize: start auto-update and load data
+    // Start auto-update and initial load
     startAutoUpdate();
-    // initial load
     fetchLatestData();
   </script>
 </body>
