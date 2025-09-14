@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify, Response
+from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timezone
@@ -11,8 +11,8 @@ app.secret_key = 'your-secret-key-here'  # Change this to a random secret key
 # Hardcoded PostgreSQL connection details
 DB_USER = 'red_db_user'
 DB_PASSWORD = '08PP2B2lSy2GAD5H7Jp51XRbrzldYOZB'
-DB_HOST = 'dpg-d32s8gur433s73bavsvg-a.oregon-postgres.render.com'
-DB_NAME = 'red_db'
+DB_HOST = 'dpg-cp3f8v6v2p9s73foknq0-a.oregon-postgres.render.com'
+DB_NAME = 'red_db_3p6a'
 
 # Configure PostgreSQL database
 app.config['SQLALCHEMY_DATABASE_URI'] = f'postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}/{DB_NAME}'
@@ -26,7 +26,7 @@ class User(db.Model):
     username = db.Column(db.String(80), unique=True, nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(120), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -37,13 +37,13 @@ class User(db.Model):
 # Network Traffic model
 class NetworkTraffic(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    timestamp = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     source = db.Column(db.String(255), nullable=False)
     dest = db.Column(db.String(255), nullable=False)
     protocol = db.Column(db.String(50), nullable=False)
     service = db.Column(db.String(100))
     content = db.Column(db.Text)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
     def to_dict(self):
         """Convert model to dictionary for JSON serialization"""
