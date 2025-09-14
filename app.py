@@ -21,6 +21,20 @@ def login_required(f):
         if 'user_id' not in session:
             flash('Please log in to access this page.', 'error')
             return redirect(url_for('login', next=request.url))
+        
+        # Verify user still exists in database
+        conn = get_db()
+        user = conn.execute(
+            'SELECT id FROM users WHERE id = ?',
+            (session['user_id'],)
+        ).fetchone()
+        conn.close()
+        
+        if not user:
+            session.clear()
+            flash('Your account no longer exists.', 'error')
+            return redirect(url_for('login'))
+            
         return f(*args, **kwargs)
     return decorated_function
 
@@ -88,9 +102,19 @@ def register():
         password = request.form['password']
         confirm_password = request.form['confirm_password']
         
+        # Validate input
+        if not username or not email or not password:
+            flash('All fields are required!', 'error')
+            return render_template('register.html')
+        
         # Check if passwords match
         if password != confirm_password:
             flash('Passwords do not match!', 'error')
+            return render_template('register.html')
+        
+        # Check password strength
+        if len(password) < 8:
+            flash('Password must be at least 8 characters long!', 'error')
             return render_template('register.html')
         
         # Check if user already exists
@@ -107,15 +131,20 @@ def register():
         
         # Create new user
         password_hash = generate_password_hash(password)
-        conn.execute(
-            'INSERT INTO users (username, email, password_hash) VALUES (?, ?, ?)',
-            (username, email, password_hash)
-        )
-        conn.commit()
-        conn.close()
-        
-        flash('Registration successful! Please log in.', 'success')
-        return redirect(url_for('login'))
+        try:
+            conn.execute(
+                'INSERT INTO users (username, email, password_hash) VALUES (?, ?, ?)',
+                (username, email, password_hash)
+            )
+            conn.commit()
+            conn.close()
+            
+            flash('Registration successful! Please log in.', 'success')
+            return redirect(url_for('login'))
+        except sqlite3.IntegrityError:
+            flash('Username or email already exists!', 'error')
+            conn.close()
+            return render_template('register.html')
     
     return render_template('register.html')
 
@@ -123,12 +152,27 @@ def register():
 def login():
     # If user is already logged in, redirect to dashboard
     if 'user_id' in session:
-        return redirect(url_for('dashboard'))
+        # Verify user still exists in database
+        conn = get_db()
+        user = conn.execute(
+            'SELECT id FROM users WHERE id = ?',
+            (session['user_id'],)
+        ).fetchone()
+        conn.close()
+        
+        if user:
+            return redirect(url_for('dashboard'))
+        else:
+            session.clear()
     
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
         next_page = request.args.get('next')
+        
+        if not username or not password:
+            flash('Please enter both username and password', 'error')
+            return render_template('login.html')
         
         conn = get_db()
         user = conn.execute(
