@@ -1,81 +1,68 @@
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
-from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timezone
 import json
 import time
+import sqlite3
+import os
+from pathlib import Path
 
 app = Flask(__name__)
 app.secret_key = 'your-secret-key-here'  # Change this to a random secret key
 
-# Hardcoded PostgreSQL connection details
-DB_USER = 'red_db_user'
-DB_PASSWORD = '08PP2B2lSy2GAD5H7Jp51XRbrzldYOZB'
-DB_HOST = 'dpg-d32s8gur433s73bavsvg-a.oregon-postgres.render.com'
-DB_NAME = 'red_db'
+# Use SQLite instead of PostgreSQL to avoid driver issues
+DB_PATH = Path('app.db')
 
-# Configure PostgreSQL database with asyncpg dialect
-app.config['SQLALCHEMY_DATABASE_URI'] = f'postgresql+asyncpg://{DB_USER}:{DB_PASSWORD}@{DB_HOST}/{DB_NAME}'
-app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
-    'connect_args': {
-        'ssl': 'require'
-    }
-}
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-
-db = SQLAlchemy(app)
-
-# User model
-class User(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(80), unique=True, nullable=False)
-    email = db.Column(db.String(120), unique=True, nullable=False)
-    password_hash = db.Column(db.String(120), nullable=False)
-    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+# Database setup
+def init_db():
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
     
-    def set_password(self, password):
-        self.password_hash = generate_password_hash(password)
+    # Create users table
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            email TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
     
-    def check_password(self, password):
-        return check_password_hash(self.password_hash, password)
-
-# Network Traffic model
-class NetworkTraffic(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    timestamp = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
-    source = db.Column(db.String(255), nullable=False)
-    dest = db.Column(db.String(255), nullable=False)
-    protocol = db.Column(db.String(50), nullable=False)
-    service = db.Column(db.String(100))
-    content = db.Column(db.Text)
-    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
-
-    def to_dict(self):
-        """Convert model to dictionary for JSON serialization"""
-        return {
-            'id': self.id,
-            'timestamp': self.timestamp.isoformat() + 'Z',
-            'source': self.source,
-            'dest': self.dest,
-            'protocol': self.protocol,
-            'service': self.service,
-            'content': self.content
-        }
+    # Create network_traffic table
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS network_traffic (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            source TEXT NOT NULL,
+            dest TEXT NOT NULL,
+            protocol TEXT NOT NULL,
+            service TEXT,
+            content TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    
+    # Create default admin user if not exists
+    c.execute("SELECT id FROM users WHERE username = 'admin'")
+    if not c.fetchone():
+        password_hash = generate_password_hash('admin123')
+        c.execute(
+            "INSERT INTO users (username, email, password_hash) VALUES (?, ?, ?)",
+            ('admin', 'admin@example.com', password_hash)
+        )
+    
+    conn.commit()
+    conn.close()
 
 # Initialize database
-with app.app_context():
-    try:
-        db.create_all()
-        
-        # Create default admin user if not exists
-        if not User.query.filter_by(username='admin').first():
-            admin = User(username='admin', email='admin@example.com')
-            admin.set_password('admin123')
-            db.session.add(admin)
-            db.session.commit()
-            print("Database initialized successfully")
-    except Exception as e:
-        print(f"Error initializing database: {str(e)}")
+init_db()
+
+# Database connection helper
+def get_db():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
 
 # Routes
 @app.route('/')
@@ -98,27 +85,28 @@ def register():
             return render_template('register.html')
         
         # Check if user already exists
-        if User.query.filter_by(username=username).first():
-            flash('Username already exists!', 'error')
-            return render_template('register.html')
+        conn = get_db()
+        user = conn.execute(
+            'SELECT id FROM users WHERE username = ? OR email = ?',
+            (username, email)
+        ).fetchone()
         
-        if User.query.filter_by(email=email).first():
-            flash('Email already exists!', 'error')
+        if user:
+            flash('Username or email already exists!', 'error')
+            conn.close()
             return render_template('register.html')
         
         # Create new user
-        new_user = User(username=username, email=email)
-        new_user.set_password(password)
+        password_hash = generate_password_hash(password)
+        conn.execute(
+            'INSERT INTO users (username, email, password_hash) VALUES (?, ?, ?)',
+            (username, email, password_hash)
+        )
+        conn.commit()
+        conn.close()
         
-        try:
-            db.session.add(new_user)
-            db.session.commit()
-            flash('Registration successful! Please log in.', 'success')
-            return redirect(url_for('login'))
-        except Exception as e:
-            db.session.rollback()
-            flash('Error creating user. Please try again.', 'error')
-            return render_template('register.html')
+        flash('Registration successful! Please log in.', 'success')
+        return redirect(url_for('login'))
     
     return render_template('register.html')
 
@@ -128,11 +116,16 @@ def login():
         username = request.form['username']
         password = request.form['password']
         
-        user = User.query.filter_by(username=username).first()
+        conn = get_db()
+        user = conn.execute(
+            'SELECT * FROM users WHERE username = ?',
+            (username,)
+        ).fetchone()
+        conn.close()
         
-        if user and user.check_password(password):
-            session['user_id'] = user.id
-            session['username'] = user.username
+        if user and check_password_hash(user['password_hash'], password):
+            session['user_id'] = user['id']
+            session['username'] = user['username']
             flash('Login successful!', 'success')
             return redirect(url_for('dashboard'))
         else:
@@ -146,11 +139,11 @@ def dashboard():
         return redirect(url_for('login'))
     
     # Get the latest network traffic data
-    try:
-        network_traffic = NetworkTraffic.query.order_by(NetworkTraffic.timestamp.desc()).limit(50).all()
-    except Exception as e:
-        flash('Error loading network traffic data', 'error')
-        network_traffic = []
+    conn = get_db()
+    network_traffic = conn.execute(
+        'SELECT * FROM network_traffic ORDER BY timestamp DESC LIMIT 50'
+    ).fetchall()
+    conn.close()
     
     return render_template('dashboard.html', 
                          username=session['username'], 
@@ -165,37 +158,42 @@ def receive_network_traffic():
         if not data:
             return jsonify({'error': 'No data provided'}), 400
         
-        # Create new network traffic record
-        new_traffic = NetworkTraffic(
-            source=data.get('source'),
-            dest=data.get('dest'),
-            protocol=data.get('protocol'),
-            service=data.get('service'),
-            content=data.get('content')
+        conn = get_db()
+        conn.execute(
+            'INSERT INTO network_traffic (source, dest, protocol, service, content, timestamp) VALUES (?, ?, ?, ?, ?, ?)',
+            (data.get('source'), data.get('dest'), data.get('protocol'), 
+             data.get('service'), data.get('content'), data.get('timestamp', datetime.now(timezone.utc).isoformat()))
         )
-        
-        # If timestamp is provided, use it
-        if 'timestamp' in data:
-            new_traffic.timestamp = datetime.fromisoformat(data['timestamp'].replace('Z', '+00:00'))
-        
-        db.session.add(new_traffic)
-        db.session.commit()
+        conn.commit()
+        conn.close()
         
         return jsonify({'message': 'Network traffic data stored successfully'}), 200
         
     except Exception as e:
-        db.session.rollback()
         return jsonify({'error': f'Failed to store data: {str(e)}'}), 500
 
 # API endpoint to get latest network traffic
 @app.route('/api/network-traffic/latest')
 def get_latest_network_traffic():
     try:
-        # Get the latest network traffic data
-        latest_traffic = NetworkTraffic.query.order_by(NetworkTraffic.timestamp.desc()).limit(50).all()
+        conn = get_db()
+        latest_traffic = conn.execute(
+            'SELECT * FROM network_traffic ORDER BY timestamp DESC LIMIT 50'
+        ).fetchall()
+        conn.close()
         
         # Convert to list of dictionaries
-        traffic_data = [t.to_dict() for t in latest_traffic]
+        traffic_data = []
+        for t in latest_traffic:
+            traffic_data.append({
+                'id': t['id'],
+                'timestamp': t['timestamp'],
+                'source': t['source'],
+                'dest': t['dest'],
+                'protocol': t['protocol'],
+                'service': t['service'],
+                'content': t['content']
+            })
         
         return jsonify(traffic_data)
     except Exception as e:
