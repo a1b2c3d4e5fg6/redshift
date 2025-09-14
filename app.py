@@ -5,11 +5,12 @@ import json
 import time
 import sqlite3
 import os
+import re
 from pathlib import Path
 from functools import wraps
 
 app = Flask(__name__)
-app.secret_key = 'your-secret-key-here'  # Change this to a random secret key
+app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-key')  # Use environment variable for security
 
 # Use SQLite instead of PostgreSQL to avoid driver issues
 DB_PATH = Path('app.db')
@@ -89,6 +90,11 @@ def get_db():
     conn.row_factory = sqlite3.Row
     return conn
 
+# Email validation function
+def is_valid_email(email):
+    pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    return re.match(pattern, email) is not None
+
 # Routes
 @app.route('/')
 def index():
@@ -97,24 +103,37 @@ def index():
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
-        username = request.form['username']
-        email = request.form['email']
+        username = request.form['username'].strip()
+        email = request.form['email'].strip().lower()
         password = request.form['password']
         confirm_password = request.form['confirm_password']
         
         # Validate input
-        if not username or not email or not password:
-            flash('All fields are required!', 'error')
-            return render_template('register.html')
+        errors = []
         
-        # Check if passwords match
-        if password != confirm_password:
-            flash('Passwords do not match!', 'error')
-            return render_template('register.html')
+        if not username:
+            errors.append('Username is required!')
+        elif len(username) < 3:
+            errors.append('Username must be at least 3 characters long!')
+        elif not username.isalnum():
+            errors.append('Username can only contain letters and numbers!')
+            
+        if not email:
+            errors.append('Email is required!')
+        elif not is_valid_email(email):
+            errors.append('Please enter a valid email address!')
+            
+        if not password:
+            errors.append('Password is required!')
+        elif len(password) < 8:
+            errors.append('Password must be at least 8 characters long!')
+        elif password != confirm_password:
+            errors.append('Passwords do not match!')
         
-        # Check password strength
-        if len(password) < 8:
-            flash('Password must be at least 8 characters long!', 'error')
+        # If there are errors, show them and return
+        if errors:
+            for error in errors:
+                flash(error, 'error')
             return render_template('register.html')
         
         # Check if user already exists
@@ -166,7 +185,7 @@ def login():
             session.clear()
     
     if request.method == 'POST':
-        username = request.form['username']
+        username = request.form['username'].strip()
         password = request.form['password']
         next_page = request.args.get('next')
         
@@ -176,8 +195,8 @@ def login():
         
         conn = get_db()
         user = conn.execute(
-            'SELECT * FROM users WHERE username = ?',
-            (username,)
+            'SELECT * FROM users WHERE username = ? OR email = ?',
+            (username, username)  # Allow login with either username or email
         ).fetchone()
         conn.close()
         
@@ -189,7 +208,7 @@ def login():
             # Redirect to the requested page or dashboard
             return redirect(next_page or url_for('dashboard'))
         else:
-            flash('Invalid username or password', 'error')
+            flash('Invalid username/email or password', 'error')
     
     return render_template('login.html')
 
