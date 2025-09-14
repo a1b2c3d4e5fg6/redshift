@@ -6,5 +6,5 @@ Flask-SocketIO==5.3.6
 python-engineio==4.7.1
 python-socketio==5.8.0
 gunicorn==21.2.0
-eventlet==0.33.3
+gevent==23.9.1
 greenlet==2.0.2
