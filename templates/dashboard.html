@@ -1,32 +1,525 @@
-from datetime import datetime
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kali Network Dashboard</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --primary: #4361ee;
+            --secondary: #3a0ca3;
+            --success: #4cc9f0;
+            --warning: #f72585;
+            --danger: #e63946;
+            --dark: #2b2d42;
+            --light: #f8f9fa;
+            --gray: #6c757d;
+            --sensitive-bg: #fff3cd;
+            --sensitive-border: #ffd966;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        body {
+            background-color: #f5f7fb;
+            color: #333;
+            line-height: 1.6;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            color: white;
+            padding: 20px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .header h1 {
+            font-size: 28px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #3a56d4;
+        }
+        
+        .btn-danger {
+            background: var(--danger);
+            color: white;
+        }
+        
+        .btn-danger:hover {
+            background: #d13438;
+        }
+        
+        .control-panel {
+            padding: 20px 30px;
+            background: white;
+            border-bottom: 1px solid #eaeaea;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+        
+        .auto-update {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .update-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+        
+        .updating {
+            background-color: var(--success);
+            box-shadow: 0 0 0 3px rgba(76, 201, 240, 0.3);
+        }
+        
+        .paused {
+            background-color: var(--danger);
+        }
+        
+        .data-section {
+            padding: 25px 30px;
+        }
+        
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        
+        .data-table th, .data-table td {
+            padding: 14px 16px;
+            text-align: left;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        
+        .data-table th {
+            background-color: #f8fafc;
+            font-weight: 600;
+            color: var(--dark);
+            position: sticky;
+            top: 0;
+        }
+        
+        .data-table tr:hover {
+            background-color: #f7fafc;
+        }
+        
+        .sensitive-row {
+            background-color: var(--sensitive-bg) !important;
+            border-left: 4px solid var(--sensitive-border);
+        }
+        
+        .sensitive-row:hover {
+            background-color: #ffeaa7 !important;
+        }
+        
+        .sensitive-label {
+            background: var(--sensitive-border);
+            color: #856404;
+            font-size: 11px;
+            padding: 2px 8px;
+            border-radius: 3px;
+            font-weight: bold;
+            margin-left: 8px;
+        }
+        
+        .content-cell {
+            max-width: 300px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        
+        .view-packet-link {
+            color: var(--primary);
+            text-decoration: none;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+        
+        .view-packet-link:hover {
+            text-decoration: underline;
+        }
+        
+        .protocol-badge {
+            background: #e9ecef;
+            padding: 4px 10px;
+            border-radius: 15px;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--dark);
+        }
+        
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0, 0, 0, 0.5);
+        }
+        
+        .modal-content {
+            background-color: white;
+            margin: 5% auto;
+            padding: 25px;
+            border-radius: 10px;
+            box-shadow: 0 5px 25px rgba(0, 0, 0, 0.2);
+            width: 80%;
+            max-width: 800px;
+            position: relative;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+            position: absolute;
+            right: 20px;
+            top: 15px;
+        }
+        
+        .close:hover {
+            color: var(--dark);
+        }
+        
+        .packet-details {
+            background: #f8fafc;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 15px;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+        
+        .no-data {
+            text-align: center;
+            padding: 40px;
+            color: var(--gray);
+        }
+        
+        .no-data i {
+            font-size: 48px;
+            margin-bottom: 15px;
+            color: #dee2e6;
+        }
+        
+        @media (max-width: 768px) {
+            .control-panel {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            
+            .data-table {
+                display: block;
+                overflow-x: auto;
+            }
+            
+            .header {
+                flex-direction: column;
+                text-align: center;
+                gap: 15px;
+            }
+            
+            .header h1 {
+                font-size: 24px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1><i class="fas fa-shield-alt"></i> Kali Network Dashboard</h1>
+            <div class="user-info">
+                <span>Welcome, {{ username }}!</span>
+                <a href="{{ url_for('logout') }}" class="btn btn-danger"><i class="fas fa-sign-out-alt"></i> Logout</a>
+            </div>
+        </div>
 
-@app.route('/dashboard')
-def dashboard():
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
-    
-    # Get the latest network traffic data
-    conn = get_db()
-    network_traffic = conn.execute(
-        'SELECT * FROM network_traffic ORDER BY timestamp DESC LIMIT 50'
-    ).fetchall()
-    conn.close()
-    
-    # Convert string timestamps to datetime objects
-    formatted_traffic = []
-    for traffic in network_traffic:
-        traffic_dict = dict(traffic)
-        # Convert timestamp if it's a string
-        if isinstance(traffic_dict['timestamp'], str):
-            try:
-                traffic_dict['timestamp'] = datetime.strptime(
-                    traffic_dict['timestamp'], '%Y-%m-%d %H:%M:%S'
-                )
-            except ValueError:
-                # Handle different timestamp formats if needed
-                pass
-        formatted_traffic.append(traffic_dict)
-    
-    return render_template('dashboard.html', 
-                         username=session['username'], 
-                         network_traffic=formatted_traffic)
+        <div class="control-panel">
+            <div class="auto-update">
+                <span id="update-indicator" class="update-indicator updating"></span>
+                <span id="update-status">Auto-update enabled (updates every 5 seconds)</span>
+                <button id="toggle-update" class="btn btn-primary"><i class="fas fa-pause"></i> Pause Updates</button>
+            </div>
+            <button id="refresh-btn" class="btn btn-primary"><i class="fas fa-sync-alt"></i> Refresh Now</button>
+        </div>
+
+        <div class="data-section">
+            <h2><i class="fas fa-network-wired"></i> Network Traffic</h2>
+            
+            {% if network_traffic %}
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Timestamp</th>
+                            <th>Source</th>
+                            <th>Destination</th>
+                            <th>Protocol</th>
+                            <th>Service</th>
+                            <th>Content</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="network-traffic-body">
+                        {% for traffic in network_traffic %}
+                        <tr class="{% if traffic.sensitive %}sensitive-row{% endif %}">
+                            <td>{{ traffic.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                            <td>
+                                {{ traffic.source }}
+                                {% if traffic.sensitive %}<span class="sensitive-label">SENSITIVE</span>{% endif %}
+                            </td>
+                            <td>{{ traffic.dest }}</td>
+                            <td><span class="protocol-badge">{{ traffic.protocol }}</span></td>
+                            <td>{{ traffic.service }}</td>
+                            <td class="content-cell">
+                                {% if traffic.content %}
+                                    {{ traffic.content[:50] }}{% if traffic.content|length > 50 %}...{% endif %}
+                                {% else %}
+                                    No content
+                                {% endif %}
+                            </td>
+                            <td>
+                                <a href="#" class="view-packet-link" onclick="showPacketContent('{{ traffic.content | replace("'", "\\'") | replace('"', '\\"') }}')">
+                                    <i class="fas fa-external-link-alt"></i> View Packet
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            {% else %}
+                <div class="no-data">
+                    <i class="fas fa-inbox"></i>
+                    <h3>No network traffic data available</h3>
+                    <p>Wait for data from your Kali machine.</p>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Packet Content Modal -->
+    <div id="packetModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal()">&times;</span>
+            <h3><i class="fas fa-file-alt"></i> Packet Content Details</h3>
+            <div class="packet-details" id="modal-content"></div>
+        </div>
+    </div>
+
+    <script>
+        let autoUpdateEnabled = true;
+        let updateInterval;
+        
+        // Function to fetch latest data
+        function fetchLatestData() {
+            fetch('/api/network-traffic/latest')
+                .then(response => response.json())
+                .then(data => {
+                    updateTable(data);
+                })
+                .catch(error => {
+                    console.error('Error fetching data:', error);
+                });
+        }
+        
+        // Function to update the table with new data
+        function updateTable(data) {
+            const tableBody = document.getElementById('network-traffic-body');
+            
+            if (data.length === 0) {
+                // Show no data message
+                document.querySelector('.data-section').innerHTML = `
+                    <h2><i class="fas fa-network-wired"></i> Network Traffic</h2>
+                    <div class="no-data">
+                        <i class="fas fa-inbox"></i>
+                        <h3>No network traffic data available</h3>
+                        <p>Wait for data from your Kali machine.</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            // Create new table if it doesn't exist
+            if (!tableBody) {
+                document.querySelector('.data-section').innerHTML = `
+                    <h2><i class="fas fa-network-wired"></i> Network Traffic</h2>
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Timestamp</th>
+                                <th>Source</th>
+                                <th>Destination</th>
+                                <th>Protocol</th>
+                                <th>Service</th>
+                                <th>Content</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="network-traffic-body"></tbody>
+                    </table>
+                `;
+            }
+            
+            // Clear existing table body
+            const newTableBody = document.getElementById('network-traffic-body');
+            newTableBody.innerHTML = '';
+            
+            // Add new rows
+            data.forEach(traffic => {
+                const row = document.createElement('tr');
+                
+                // Add sensitive class if needed
+                if (traffic.sensitive) {
+                    row.classList.add('sensitive-row');
+                }
+                
+                // Format timestamp
+                const timestamp = new Date(traffic.timestamp);
+                const formattedTimestamp = timestamp.toLocaleString();
+                
+                // Create content cell
+                let contentCell = 'No content';
+                if (traffic.content) {
+                    contentCell = `${traffic.content.substring(0, 50)}${traffic.content.length > 50 ? '...' : ''}`;
+                }
+                
+                row.innerHTML = `
+                    <td>${formattedTimestamp}</td>
+                    <td>
+                        ${traffic.source}
+                        ${traffic.sensitive ? '<span class="sensitive-label">SENSITIVE</span>' : ''}
+                    </td>
+                    <td>${traffic.dest}</td>
+                    <td><span class="protocol-badge">${traffic.protocol}</span></td>
+                    <td>${traffic.service || ''}</td>
+                    <td class="content-cell">${contentCell}</td>
+                    <td>
+                        <a href="#" class="view-packet-link" onclick="showPacketContent('${traffic.content.replace(/'/g, "\\'").replace(/"/g, '\\"')}')">
+                            <i class="fas fa-external-link-alt"></i> View Packet
+                        </a>
+                    </td>
+                `;
+                
+                newTableBody.appendChild(row);
+            });
+        }
+        
+        // Function to toggle auto-update
+        function toggleAutoUpdate() {
+            autoUpdateEnabled = !autoUpdateEnabled;
+            
+            const indicator = document.getElementById('update-indicator');
+            const status = document.getElementById('update-status');
+            const button = document.getElementById('toggle-update');
+            
+            if (autoUpdateEnabled) {
+                indicator.className = 'update-indicator updating';
+                status.textContent = 'Auto-update enabled (updates every 5 seconds)';
+                button.innerHTML = '<i class="fas fa-pause"></i> Pause Updates';
+                startAutoUpdate();
+            } else {
+                indicator.className = 'update-indicator paused';
+                status.textContent = 'Auto-update paused';
+                button.innerHTML = '<i class="fas fa-play"></i> Resume Updates';
+                clearInterval(updateInterval);
+            }
+        }
+        
+        // Function to start auto-update
+        function startAutoUpdate() {
+            if (updateInterval) {
+                clearInterval(updateInterval);
+            }
+            
+            updateInterval = setInterval(fetchLatestData, 5000); // Update every 5 seconds
+        }
+        
+        // Modal functions
+        function showPacketContent(content) {
+            const modal = document.getElementById('packetModal');
+            document.getElementById('modal-content').textContent = content;
+            modal.style.display = 'block';
+        }
+        
+        function closeModal() {
+            document.getElementById('packetModal').style.display = 'none';
+        }
+        
+        // Event listeners
+        document.getElementById('toggle-update').addEventListener('click', toggleAutoUpdate);
+        document.getElementById('refresh-btn').addEventListener('click', fetchLatestData);
+        
+        // Close modal when clicking outside of it
+        window.onclick = function(event) {
+            const modal = document.getElementById('packetModal');
+            if (event.target == modal) {
+                closeModal();
+            }
+        }
+        
+        // Start auto-update when page loads
+        startAutoUpdate();
+    </script>
+</body>
+</html>
