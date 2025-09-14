@@ -7,7 +7,6 @@ import sqlite3
 import os
 from pathlib import Path
 
-# Corrected line: use __name__ instead of _name_
 app = Flask(__name__)
 app.secret_key = 'your-secret-key-here'  # Change this to a random secret key
 
@@ -144,9 +143,30 @@ def dashboard():
     ).fetchall()
     conn.close()
     
+    # Convert string timestamps to datetime objects
+    formatted_traffic = []
+    for traffic in network_traffic:
+        traffic_dict = dict(traffic)
+        # Convert timestamp if it's a string
+        if isinstance(traffic_dict['timestamp'], str):
+            try:
+                traffic_dict['timestamp'] = datetime.strptime(
+                    traffic_dict['timestamp'], '%Y-%m-%d %H:%M:%S'
+                )
+            except ValueError:
+                # If the format is different, try another common format
+                try:
+                    traffic_dict['timestamp'] = datetime.fromisoformat(
+                        traffic_dict['timestamp'].replace('Z', '+00:00')
+                    )
+                except ValueError:
+                    # If all else fails, keep the original string
+                    pass
+        formatted_traffic.append(traffic_dict)
+    
     return render_template('dashboard.html', 
                          username=session['username'], 
-                         network_traffic=network_traffic)
+                         network_traffic=formatted_traffic)
 
 # API endpoint for receiving network traffic
 @app.route('/api/network-traffic', methods=['POST'])
@@ -212,6 +232,5 @@ def health_check():
 # For Gunicorn production deployment
 application = app
 
-# Corrected line: use __name__ instead of _name_
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
