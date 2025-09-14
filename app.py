@@ -14,8 +14,13 @@ DB_PASSWORD = '08PP2B2lSy2GAD5H7Jp51XRbrzldYOZB'
 DB_HOST = 'dpg-d32s8gur433s73bavsvg-a.oregon-postgres.render.com'
 DB_NAME = 'red_db'
 
-# Configure PostgreSQL database with pg8000 dialect
-app.config['SQLALCHEMY_DATABASE_URI'] = f'postgresql+pg8000://{DB_USER}:{DB_PASSWORD}@{DB_HOST}/{DB_NAME}'
+# Configure PostgreSQL database with asyncpg dialect
+app.config['SQLALCHEMY_DATABASE_URI'] = f'postgresql+asyncpg://{DB_USER}:{DB_PASSWORD}@{DB_HOST}/{DB_NAME}'
+app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+    'connect_args': {
+        'ssl': 'require'
+    }
+}
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
@@ -59,14 +64,18 @@ class NetworkTraffic(db.Model):
 
 # Initialize database
 with app.app_context():
-    db.create_all()
-    
-    # Create default admin user if not exists
-    if not User.query.filter_by(username='admin').first():
-        admin = User(username='admin', email='admin@example.com')
-        admin.set_password('admin123')
-        db.session.add(admin)
-        db.session.commit()
+    try:
+        db.create_all()
+        
+        # Create default admin user if not exists
+        if not User.query.filter_by(username='admin').first():
+            admin = User(username='admin', email='admin@example.com')
+            admin.set_password('admin123')
+            db.session.add(admin)
+            db.session.commit()
+            print("Database initialized successfully")
+    except Exception as e:
+        print(f"Error initializing database: {str(e)}")
 
 # Routes
 @app.route('/')
@@ -137,7 +146,11 @@ def dashboard():
         return redirect(url_for('login'))
     
     # Get the latest network traffic data
-    network_traffic = NetworkTraffic.query.order_by(NetworkTraffic.timestamp.desc()).limit(50).all()
+    try:
+        network_traffic = NetworkTraffic.query.order_by(NetworkTraffic.timestamp.desc()).limit(50).all()
+    except Exception as e:
+        flash('Error loading network traffic data', 'error')
+        network_traffic = []
     
     return render_template('dashboard.html', 
                          username=session['username'], 
@@ -177,13 +190,16 @@ def receive_network_traffic():
 # API endpoint to get latest network traffic
 @app.route('/api/network-traffic/latest')
 def get_latest_network_traffic():
-    # Get the latest network traffic data
-    latest_traffic = NetworkTraffic.query.order_by(NetworkTraffic.timestamp.desc()).limit(50).all()
-    
-    # Convert to list of dictionaries
-    traffic_data = [t.to_dict() for t in latest_traffic]
-    
-    return jsonify(traffic_data)
+    try:
+        # Get the latest network traffic data
+        latest_traffic = NetworkTraffic.query.order_by(NetworkTraffic.timestamp.desc()).limit(50).all()
+        
+        # Convert to list of dictionaries
+        traffic_data = [t.to_dict() for t in latest_traffic]
+        
+        return jsonify(traffic_data)
+    except Exception as e:
+        return jsonify({'error': f'Failed to fetch data: {str(e)}'}), 500
 
 @app.route('/logout')
 def logout():
