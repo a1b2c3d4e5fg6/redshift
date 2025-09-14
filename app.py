@@ -7,7 +7,7 @@ import sqlite3
 import os
 from pathlib import Path
 
-app = Flask(__name__)
+app = Flask(_name_)
 app.secret_key = 'your-secret-key-here'  # Change this to a random secret key
 
 # Use SQLite instead of PostgreSQL to avoid driver issues
@@ -67,8 +67,6 @@ def get_db():
 # Routes
 @app.route('/')
 def index():
-    if 'user_id' in session:
-        return redirect(url_for('login'))
     return redirect(url_for('login'))
 
 @app.route('/register', methods=['GET', 'POST'])
@@ -213,5 +211,5 @@ def health_check():
 # For Gunicorn production deployment
 application = app
 
-if __name__ == '__main__':
+if _name_ == '_main_':
     app.run(debug=True, host='0.0.0.0', port=5000)
