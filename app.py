@@ -3,17 +3,18 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timezone
 import json
 import time
-import sqlite3
+import psycopg2  # Changed from sqlite3 to psycopg2 for PostgreSQL
 import os
 import re
 from pathlib import Path
 from functools import wraps
+from urllib.parse import urlparse  # For parsing database URL
 
 app = Flask(__name__)
-app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-key')  # Use environment variable for security
+app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-key')
 
-# Use SQLite instead of PostgreSQL to avoid driver issues
-DB_PATH = Path('app.db')
+# PostgreSQL database configuration
+DATABASE_URL = os.environ.get('DATABASE_URL', 'postgresql://red_db_user:08PP2B2lSy2GAD5H7Jp51XRbrzldYOZB@dpg-d32s8gur433s73bavsvg-a.oregon-postgres.render.com/red_db')
 
 # Login required decorator
 def login_required(f):
@@ -25,10 +26,13 @@ def login_required(f):
         
         # Verify user still exists in database
         conn = get_db()
-        user = conn.execute(
-            'SELECT id FROM users WHERE id = ?',
+        cur = conn.cursor()
+        cur.execute(
+            'SELECT id FROM users WHERE id = %s',
             (session['user_id'],)
-        ).fetchone()
+        )
+        user = cur.fetchone()
+        cur.close()
         conn.close()
         
         if not user:
@@ -42,13 +46,13 @@ def login_required(f):
 # Database setup
 def init_db():
     try:
-        conn = sqlite3.connect(DB_PATH)
-        c = conn.cursor()
+        conn = get_db()
+        cur = conn.cursor()
         
         # Create users table
-        c.execute('''
+        cur.execute('''
             CREATE TABLE IF NOT EXISTS users (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id SERIAL PRIMARY KEY,
                 username TEXT UNIQUE NOT NULL,
                 email TEXT UNIQUE NOT NULL,
                 password_hash TEXT NOT NULL,
@@ -57,9 +61,9 @@ def init_db():
         ''')
         
         # Create network_traffic table
-        c.execute('''
+        cur.execute('''
             CREATE TABLE IF NOT EXISTS network_traffic (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id SERIAL PRIMARY KEY,
                 timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 source TEXT NOT NULL,
                 dest TEXT NOT NULL,
@@ -71,28 +75,43 @@ def init_db():
         ''')
         
         # Create default admin user if not exists
-        c.execute("SELECT id FROM users WHERE username = 'admin'")
-        if not c.fetchone():
+        cur.execute("SELECT id FROM users WHERE username = 'admin'")
+        if not cur.fetchone():
             password_hash = generate_password_hash('admin123')
-            c.execute(
-                "INSERT INTO users (username, email, password_hash) VALUES (?, ?, ?)",
+            cur.execute(
+                "INSERT INTO users (username, email, password_hash) VALUES (%s, %s, %s)",
                 ('admin', 'admin@example.com', password_hash)
             )
         
         conn.commit()
+        cur.close()
         conn.close()
-        print(f"Database initialized successfully at {DB_PATH.absolute()}")
+        print("Database initialized successfully")
     except Exception as e:
         print(f"Error initializing database: {e}")
 
-# Initialize database
-init_db()
-
 # Database connection helper
 def get_db():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
+    try:
+        # Parse the database URL
+        result = urlparse(DATABASE_URL)
+        username = result.username
+        password = result.password
+        database = result.path[1:]
+        hostname = result.hostname
+        port = result.port
+        
+        conn = psycopg2.connect(
+            database=database,
+            user=username,
+            password=password,
+            host=hostname,
+            port=port
+        )
+        return conn
+    except Exception as e:
+        print(f"Error connecting to database: {e}")
+        raise e
 
 # Email validation function
 def is_valid_email(email):
@@ -104,12 +123,21 @@ def is_valid_email(email):
 def debug_users():
     try:
         conn = get_db()
-        users = conn.execute('SELECT * FROM users').fetchall()
+        cur = conn.cursor()
+        cur.execute('SELECT * FROM users')
+        users = cur.fetchall()
+        cur.close()
         conn.close()
         
         users_list = []
         for user in users:
-            users_list.append(dict(user))
+            users_list.append({
+                'id': user[0],
+                'username': user[1],
+                'email': user[2],
+                'password_hash': user[3],
+                'created_at': user[4]
+            })
         
         return jsonify(users_list)
     except Exception as e:
@@ -158,50 +186,43 @@ def register():
         
         # Check if user already exists
         conn = get_db()
-        user = conn.execute(
-            'SELECT id FROM users WHERE username = ? OR email = ?',
+        cur = conn.cursor()
+        cur.execute(
+            'SELECT id FROM users WHERE username = %s OR email = %s',
             (username, email)
-        ).fetchone()
+        )
+        user = cur.fetchone()
         
         if user:
             flash('Username or email already exists!', 'error')
+            cur.close()
             conn.close()
             return render_template('register.html')
         
         # Create new user
         password_hash = generate_password_hash(password)
         try:
-            conn.execute(
-                'INSERT INTO users (username, email, password_hash) VALUES (?, ?, ?)',
+            cur.execute(
+                'INSERT INTO users (username, email, password_hash) VALUES (%s, %s, %s) RETURNING id',
                 (username, email, password_hash)
             )
+            new_user_id = cur.fetchone()[0]
             conn.commit()
             
-            # Get the newly created user ID
-            new_user = conn.execute(
-                'SELECT id FROM users WHERE username = ?',
-                (username,)
-            ).fetchone()
+            print(f"New user created: {username} (ID: {new_user_id})")
+            flash('Registration successful! Please log in.', 'success')
             
+            cur.close()
             conn.close()
             
-            if new_user:
-                print(f"New user created: {username} (ID: {new_user['id']})")
-                flash('Registration successful! Please log in.', 'success')
-                return redirect(url_for('login'))
-            else:
-                flash('Registration failed. Please try again.', 'error')
-                return render_template('register.html')
+            return redirect(url_for('login'))
                 
-        except sqlite3.IntegrityError as e:
-            flash('Username or email already exists!', 'error')
-            conn.close()
-            print(f"Integrity error during registration: {e}")
-            return render_template('register.html')
         except Exception as e:
             flash('An error occurred during registration. Please try again.', 'error')
-            conn.close()
+            conn.rollback()
             print(f"Error during registration: {e}")
+            cur.close()
+            conn.close()
             return render_template('register.html')
     
     return render_template('register.html')
@@ -212,10 +233,13 @@ def login():
     if 'user_id' in session:
         # Verify user still exists in database
         conn = get_db()
-        user = conn.execute(
-            'SELECT id FROM users WHERE id = ?',
+        cur = conn.cursor()
+        cur.execute(
+            'SELECT id FROM users WHERE id = %s',
             (session['user_id'],)
-        ).fetchone()
+        )
+        user = cur.fetchone()
+        cur.close()
         conn.close()
         
         if user:
@@ -233,15 +257,18 @@ def login():
             return render_template('login.html')
         
         conn = get_db()
-        user = conn.execute(
-            'SELECT * FROM users WHERE username = ? OR email = ?',
+        cur = conn.cursor()
+        cur.execute(
+            'SELECT * FROM users WHERE username = %s OR email = %s',
             (username, username)  # Allow login with either username or email
-        ).fetchone()
+        )
+        user = cur.fetchone()
+        cur.close()
         conn.close()
         
-        if user and check_password_hash(user['password_hash'], password):
-            session['user_id'] = user['id']
-            session['username'] = user['username']
+        if user and check_password_hash(user[3], password):  # password_hash is at index 3
+            session['user_id'] = user[0]  # id is at index 0
+            session['username'] = user[1]  # username is at index 1
             flash('Login successful!', 'success')
             
             # Redirect to the requested page or dashboard
@@ -252,19 +279,32 @@ def login():
     return render_template('login.html')
 
 @app.route('/dashboard')
-@login_required  # This decorator ensures user is logged in
+@login_required
 def dashboard():
     # Get the latest network traffic data
     conn = get_db()
-    network_traffic = conn.execute(
+    cur = conn.cursor()
+    cur.execute(
         'SELECT * FROM network_traffic ORDER BY timestamp DESC LIMIT 50'
-    ).fetchall()
+    )
+    network_traffic = cur.fetchall()
+    cur.close()
     conn.close()
     
-    # Convert string timestamps to datetime objects
+    # Convert to list of dictionaries
     formatted_traffic = []
     for traffic in network_traffic:
-        traffic_dict = dict(traffic)
+        traffic_dict = {
+            'id': traffic[0],
+            'timestamp': traffic[1],
+            'source': traffic[2],
+            'dest': traffic[3],
+            'protocol': traffic[4],
+            'service': traffic[5],
+            'content': traffic[6],
+            'created_at': traffic[7]
+        }
+        
         # Convert timestamp if it's a string
         if isinstance(traffic_dict['timestamp'], str):
             try:
@@ -296,12 +336,14 @@ def receive_network_traffic():
             return jsonify({'error': 'No data provided'}), 400
         
         conn = get_db()
-        conn.execute(
-            'INSERT INTO network_traffic (source, dest, protocol, service, content, timestamp) VALUES (?, ?, ?, ?, ?, ?)',
+        cur = conn.cursor()
+        cur.execute(
+            'INSERT INTO network_traffic (source, dest, protocol, service, content, timestamp) VALUES (%s, %s, %s, %s, %s, %s)',
             (data.get('source'), data.get('dest'), data.get('protocol'), 
              data.get('service'), data.get('content'), data.get('timestamp', datetime.now(timezone.utc).isoformat()))
         )
         conn.commit()
+        cur.close()
         conn.close()
         
         return jsonify({'message': 'Network traffic data stored successfully'}), 200
@@ -311,26 +353,29 @@ def receive_network_traffic():
 
 # API endpoint to get latest network traffic
 @app.route('/api/network-traffic/latest')
-@login_required  # Protect API endpoints too
+@login_required
 def get_latest_network_traffic():
     try:
         conn = get_db()
-        latest_traffic = conn.execute(
+        cur = conn.cursor()
+        cur.execute(
             'SELECT * FROM network_traffic ORDER BY timestamp DESC LIMIT 50'
-        ).fetchall()
+        )
+        latest_traffic = cur.fetchall()
+        cur.close()
         conn.close()
         
         # Convert to list of dictionaries
         traffic_data = []
         for t in latest_traffic:
             traffic_data.append({
-                'id': t['id'],
-                'timestamp': t['timestamp'],
-                'source': t['source'],
-                'dest': t['dest'],
-                'protocol': t['protocol'],
-                'service': t['service'],
-                'content': t['content']
+                'id': t[0],
+                'timestamp': t[1],
+                'source': t[2],
+                'dest': t[3],
+                'protocol': t[4],
+                'service': t[5],
+                'content': t[6]
             })
         
         return jsonify(traffic_data)
@@ -347,6 +392,9 @@ def logout():
 @app.route('/health')
 def health_check():
     return jsonify({'status': 'healthy', 'timestamp': datetime.utcnow().isoformat()})
+
+# Initialize database on app start
+init_db()
 
 # For Gunicorn production deployment
 application = app
