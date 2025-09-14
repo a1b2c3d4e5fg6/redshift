@@ -1,120 +1,35 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
     <title>Kali Data Dashboard</title>
     <style>
-        /* Your existing CSS styles */
-        body {
-            font-family: Arial, sans-serif;
-            background: #f5f5f5;
-            margin: 0;
-            padding: 0;
-        }
-        .header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 20px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        .container {
-            max-width: 1400px;
-            margin: 20px auto;
-            padding: 0 20px;
-        }
-        .data-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin: 20px 0;
-            background: white;
-            border-radius: 8px;
-            overflow: hidden;
-            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
-        }
-        .data-table th, .data-table td {
-            padding: 12px 15px;
-            text-align: left;
-            border-bottom: 1px solid #eaeaea;
-        }
-        .data-table th {
-            background-color: #f8f9fa;
-            font-weight: 600;
-        }
-        .data-table tr:hover {
-            background-color: rgba(67, 97, 238, 0.05);
-        }
-        .auto-update {
-            display: flex;
-            align-items: center;
-            margin-bottom: 10px;
-        }
-        .update-indicator {
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-            margin-right: 8px;
-        }
-        .updating {
-            background-color: #28a745;
-        }
-        .paused {
-            background-color: #dc3545;
-        }
-        .btn {
-            padding: 8px 16px;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-weight: 600;
-        }
-        .btn-primary {
-            background: #4361ee;
-            color: white;
-        }
-        .btn-danger {
-            background: #e63946;
-            color: white;
-        }
-        .modal {
-            display: none;
-            position: fixed;
-            z-index: 1000;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            overflow: auto;
-            background-color: rgba(0, 0, 0, 0.5);
-        }
-        .modal-content {
-            background-color: white;
-            margin: 5% auto;
-            padding: 25px;
-            border-radius: 10px;
-            width: 80%;
-            max-width: 800px;
-            position: relative;
-        }
-        .close {
-            color: #aaa;
-            float: right;
-            font-size: 28px;
-            font-weight: bold;
-            cursor: pointer;
-        }
-        .close:hover {
-            color: #000;
-        }
-        .packet-details {
-            background: #f8f9fa;
-            padding: 20px;
-            border-radius: 8px;
-            margin-top: 15px;
-            font-family: monospace;
-            white-space: pre-wrap;
+        /* Your existing CSS styles (kept) */
+        body { font-family: Arial, sans-serif; background: #f5f5f5; margin: 0; padding: 0; }
+        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; display:flex; justify-content:space-between; align-items:center; }
+        .container { max-width:1400px; margin:20px auto; padding:0 20px; }
+        .data-table { width:100%; border-collapse:collapse; margin:20px 0; background:white; border-radius:8px; overflow:hidden; box-shadow:0 4px 10px rgba(0,0,0,0.05); }
+        .data-table th, .data-table td { padding:12px 15px; text-align:left; border-bottom:1px solid #eaeaea; vertical-align: top; }
+        .data-table th { background-color:#f8f9fa; font-weight:600; }
+        .data-table tr:hover { background-color: rgba(67,97,238,0.05); }
+        .auto-update { display:flex; align-items:center; margin-bottom:10px; }
+        .update-indicator { width:10px; height:10px; border-radius:50%; margin-right:8px; }
+        .updating { background-color:#28a745; }
+        .paused { background-color:#dc3545; }
+        .btn { padding:8px 16px; border:none; border-radius:4px; cursor:pointer; font-weight:600; }
+        .btn-primary { background:#4361ee; color:white; }
+        .btn-danger { background:#e63946; color:white; }
+        .modal { display:none; position:fixed; z-index:1000; left:0; top:0; width:100%; height:100%; overflow:auto; background-color: rgba(0,0,0,0.5); }
+        .modal-content { background:white; margin:5% auto; padding:25px; border-radius:10px; width:80%; max-width:800px; position:relative; }
+        .close { color:#aaa; float:right; font-size:28px; font-weight:bold; cursor:pointer; }
+        .close:hover { color:#000; }
+        .packet-details { background:#f8f9fa; padding:20px; border-radius:8px; margin-top:15px; font-family:monospace; white-space: pre-wrap; max-height:60vh; overflow:auto; }
+        .view-content-link { color:#0b63ff; text-decoration:underline; cursor:pointer; margin-left:8px; font-weight:600; }
+        .preview { color:#333; }
+        /* responsive small screens */
+        @media (max-width: 800px) {
+            .data-table th, .data-table td { padding:8px 10px; font-size:13px; }
         }
     </style>
 </head>
@@ -123,7 +38,7 @@
         <h1>Kali Data Dashboard</h1>
         <div>
             <span>Welcome, {{ username }}!</span>
-            <a href="{{ url_for('logout') }}" class="btn btn-danger" style="margin-left: 15px;">Logout</a>
+            <a href="{{ url_for('logout') }}" class="btn btn-danger" style="margin-left:15px;">Logout</a>
         </div>
     </div>
 
@@ -139,7 +54,7 @@
         <div class="auto-update">
             <span id="update-indicator" class="update-indicator updating"></span>
             <span id="update-status">Auto-update enabled (updates every 5 seconds)</span>
-            <button id="toggle-update" class="btn" style="margin-left: 15px;">Pause Updates</button>
+            <button id="toggle-update" class="btn" style="margin-left:15px;">Pause Updates</button>
         </div>
 
         <div class="action-buttons">
@@ -156,14 +71,14 @@
                             <th>Source</th>
                             <th>Destination</th>
                             <th>Protocol</th>
+                            <!-- Fifth column is the packet content (preview + view link) -->
+                            <th>Content (preview)</th>
                             <th>Service</th>
-                            <th>Content</th>
                         </tr>
                     </thead>
                     <tbody id="network-traffic-body">
                         {% for traffic in network_traffic %}
                         <tr>
-                            <!-- Updated timestamp display with conditional handling -->
                             <td>
                                 {% if traffic.timestamp is string %}
                                     {{ traffic.timestamp }}
@@ -174,19 +89,24 @@
                             <td>{{ traffic.source }}</td>
                             <td>{{ traffic.dest }}</td>
                             <td>{{ traffic.protocol }}</td>
-                            <td>{{ traffic.service }}</td>
+
+                            <!-- Content in column 5. Use data-content with safe JSON encoding so JS can parse it reliably. -->
                             <td class="content-cell">
                                 {% if traffic.content %}
-                                    {% if traffic.content|length > 100 %}
-                                        {{ traffic.content[:100] }}...
-                                        <span class="view-content-link" onclick="showPacketContent('{{ traffic.content | replace("'", "\\'") | replace('"', '\\"') }}')">View full content</span>
+                                    {% set raw = traffic.content %}
+                                    {% if raw|length > 100 %}
+                                        <span class="preview">{{ raw[:100] }}...</span>
+                                        <!-- data-content contains JSON-encoded string; JS will JSON.parse() it. -->
+                                        <span class="view-content-link" data-content='{{ raw|tojson|safe }}'>View full content</span>
                                     {% else %}
-                                        {{ traffic.content }}
+                                        <span class="preview">{{ raw }}</span>
                                     {% endif %}
                                 {% else %}
                                     No content
                                 {% endif %}
                             </td>
+
+                            <td>{{ traffic.service }}</td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -203,7 +123,7 @@
     <!-- Packet Content Modal -->
     <div id="packetModal" class="modal">
         <div class="modal-content">
-            <span class="close" onclick="closeModal()">&times;</span>
+            <span class="close" id="modal-close">&times;</span>
             <h3>Packet Content Details</h3>
             <div class="packet-details" id="modal-content"></div>
         </div>
@@ -212,7 +132,40 @@
     <script>
         let autoUpdateEnabled = true;
         let updateInterval;
-        
+
+        // Safe parser: if raw is JSON-encoded (string literal), JSON.parse it; otherwise return raw.
+        function safeParseContent(raw) {
+            if (raw === null || raw === undefined) return '';
+            try {
+                // If raw looks like a JSON string literal, parse it.
+                // Example raw: "\"Hello \\n world\"" or "\"{...}\""
+                if (typeof raw === 'string' && raw.length && (raw[0] === '"' || raw[0] === '{' || raw[0] === '[')) {
+                    return JSON.parse(raw);
+                }
+            } catch (e) {
+                // parsing failed — fall through
+            }
+            return raw;
+        }
+
+        function showPacketContentFromString(contentString) {
+            const modal = document.getElementById('packetModal');
+            const modalContent = document.getElementById('modal-content');
+            // always set textContent to avoid HTML injection
+            modalContent.textContent = contentString;
+            modal.style.display = 'block';
+        }
+
+        // Event delegation: open modal when a view-content-link is clicked
+        document.addEventListener('click', function (e) {
+            const el = e.target;
+            if (el && el.classList && el.classList.contains('view-content-link')) {
+                const raw = el.getAttribute('data-content');
+                const content = safeParseContent(raw);
+                showPacketContentFromString(content);
+            }
+        });
+
         // Function to fetch latest data
         function fetchLatestData() {
             fetch('/api/network-traffic/latest')
@@ -224,14 +177,13 @@
                     console.error('Error fetching data:', error);
                 });
         }
-        
-        // Function to update the table with new data
+
+        // Build table rows using DOM methods (avoid injection from building HTML strings)
         function updateTable(data) {
-            const tableBody = document.getElementById('network-traffic-body');
-            
-            if (data.length === 0) {
-                // Show no data message
-                document.getElementById('network-traffic-container').innerHTML = `
+            const container = document.getElementById('network-traffic-container');
+
+            if (!data || data.length === 0) {
+                container.innerHTML = `
                     <div class="no-data">
                         <h2>No network traffic data available</h2>
                         <p>Wait for data from your Kali machine.</p>
@@ -239,10 +191,10 @@
                 `;
                 return;
             }
-            
-            // Create new table if it doesn't exist
-            if (!tableBody) {
-                document.getElementById('network-traffic-container').innerHTML = `
+
+            // Ensure table exists
+            if (!document.getElementById('network-traffic-body')) {
+                container.innerHTML = `
                     <table class="data-table">
                         <thead>
                             <tr>
@@ -250,63 +202,94 @@
                                 <th>Source</th>
                                 <th>Destination</th>
                                 <th>Protocol</th>
+                                <th>Content (preview)</th>
                                 <th>Service</th>
-                                <th>Content</th>
                             </tr>
                         </thead>
                         <tbody id="network-traffic-body"></tbody>
                     </table>
                 `;
             }
-            
-            // Clear existing table body
-            const newTableBody = document.getElementById('network-traffic-body');
-            newTableBody.innerHTML = '';
-            
-            // Add new rows
+
+            const tbody = document.getElementById('network-traffic-body');
+            tbody.innerHTML = '';
+
             data.forEach(traffic => {
-                const row = document.createElement('tr');
-                
-                // Format timestamp - handle both string and datetime objects
-                let formattedTimestamp = traffic.timestamp;
-                if (typeof traffic.timestamp === 'string') {
-                    formattedTimestamp = traffic.timestamp;
+                const tr = document.createElement('tr');
+
+                // Timestamp
+                const tdTime = document.createElement('td');
+                let ts = traffic.timestamp;
+                if (typeof ts === 'string') {
+                    tdTime.textContent = ts;
                 } else {
-                    const timestamp = new Date(traffic.timestamp);
-                    formattedTimestamp = timestamp.toLocaleString();
-                }
-                
-                // Create content cell
-                let contentCell = 'No content';
-                if (traffic.content) {
-                    if (traffic.content.length > 100) {
-                        contentCell = `${traffic.content.substring(0, 100)}... <span class="view-content-link" onclick="showPacketContent('${traffic.content.replace(/'/g, "\\'").replace(/"/g, '\\"')}')">View full content</span>`;
-                    } else {
-                        contentCell = traffic.content;
+                    try {
+                        tdTime.textContent = new Date(ts).toLocaleString();
+                    } catch (e) {
+                        tdTime.textContent = String(ts);
                     }
                 }
-                
-                row.innerHTML = `
-                    <td>${formattedTimestamp}</td>
-                    <td>${traffic.source}</td>
-                    <td>${traffic.dest}</td>
-                    <td>${traffic.protocol}</td>
-                    <td>${traffic.service || ''}</td>
-                    <td class="content-cell">${contentCell}</td>
-                `;
-                
-                newTableBody.appendChild(row);
+                tr.appendChild(tdTime);
+
+                // Source
+                const tdSource = document.createElement('td');
+                tdSource.textContent = traffic.source || '';
+                tr.appendChild(tdSource);
+
+                // Destination
+                const tdDest = document.createElement('td');
+                tdDest.textContent = traffic.dest || '';
+                tr.appendChild(tdDest);
+
+                // Protocol
+                const tdProto = document.createElement('td');
+                tdProto.textContent = traffic.protocol || '';
+                tr.appendChild(tdProto);
+
+                // Content (5th column)
+                const tdContent = document.createElement('td');
+                tdContent.className = 'content-cell';
+                if (traffic.content) {
+                    const contentStr = (typeof traffic.content === 'string') ? traffic.content : JSON.stringify(traffic.content);
+                    if (contentStr.length > 100) {
+                        const preview = document.createElement('span');
+                        preview.className = 'preview';
+                        preview.textContent = contentStr.substring(0, 100) + '...';
+                        tdContent.appendChild(preview);
+
+                        const link = document.createElement('span');
+                        link.className = 'view-content-link';
+                        // store JSON-stringified content in data-content so JSON.parse() can reconstruct \n and quotes safely
+                        link.setAttribute('data-content', JSON.stringify(contentStr));
+                        link.textContent = 'View full content';
+                        tdContent.appendChild(link);
+                    } else {
+                        const preview = document.createElement('span');
+                        preview.className = 'preview';
+                        preview.textContent = contentStr;
+                        tdContent.appendChild(preview);
+                    }
+                } else {
+                    tdContent.textContent = 'No content';
+                }
+                tr.appendChild(tdContent);
+
+                // Service (6th column)
+                const tdService = document.createElement('td');
+                tdService.textContent = traffic.service || '';
+                tr.appendChild(tdService);
+
+                tbody.appendChild(tr);
             });
         }
-        
-        // Function to toggle auto-update
+
+        // Toggle auto-update
         function toggleAutoUpdate() {
             autoUpdateEnabled = !autoUpdateEnabled;
-            
             const indicator = document.getElementById('update-indicator');
             const status = document.getElementById('update-status');
             const button = document.getElementById('toggle-update');
-            
+
             if (autoUpdateEnabled) {
                 indicator.className = 'update-indicator updating';
                 status.textContent = 'Auto-update enabled (updates every 5 seconds)';
@@ -319,41 +302,33 @@
                 clearInterval(updateInterval);
             }
         }
-        
-        // Function to start auto-update
+
         function startAutoUpdate() {
-            if (updateInterval) {
-                clearInterval(updateInterval);
-            }
-            
-            updateInterval = setInterval(fetchLatestData, 5000); // Update every 5 seconds
+            if (updateInterval) clearInterval(updateInterval);
+            updateInterval = setInterval(fetchLatestData, 5000);
         }
-        
-        // Modal functions
-        function showPacketContent(content) {
-            const modal = document.getElementById('packetModal');
-            document.getElementById('modal-content').textContent = content;
-            modal.style.display = 'block';
-        }
-        
+
+        // Modal close
         function closeModal() {
             document.getElementById('packetModal').style.display = 'none';
         }
-        
-        // Event listeners
+
+        document.getElementById('modal-close').addEventListener('click', closeModal);
+
+        // close modal when clicking outside content
+        window.addEventListener('click', function (event) {
+            const modal = document.getElementById('packetModal');
+            if (event.target === modal) closeModal();
+        });
+
+        // Buttons
         document.getElementById('toggle-update').addEventListener('click', toggleAutoUpdate);
         document.getElementById('refresh-btn').addEventListener('click', fetchLatestData);
-        
-        // Close modal when clicking outside of it
-        window.onclick = function(event) {
-            const modal = document.getElementById('packetModal');
-            if (event.target == modal) {
-                closeModal();
-            }
-        }
-        
-        // Start auto-update when page loads
+
+        // Start
         startAutoUpdate();
+        // initial load
+        fetchLatestData();
     </script>
 </body>
 </html>
