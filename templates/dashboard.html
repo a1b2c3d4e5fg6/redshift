@@ -1,39 +1,11 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>Kali Data Dashboard</title>
-  <style>
-    body { font-family: Arial, sans-serif; background: #f5f5f5; margin:0; padding:0; }
-    .header { background: linear-gradient(135deg,#667eea 0%,#764ba2 100%); color:white; padding:20px; display:flex; justify-content:space-between; align-items:center; }
-    .container { max-width:1400px; margin:20px auto; padding:0 20px; }
-    .data-table { width:100%; border-collapse:collapse; margin:20px 0; background:white; border-radius:8px; overflow:hidden; box-shadow:0 4px 10px rgba(0,0,0,0.05); }
-    .data-table th,.data-table td{ padding:12px 15px; text-align:left; border-bottom:1px solid #eaeaea; vertical-align:top; }
-    .data-table th{ background:#f8f9fa; font-weight:600; }
-    .data-table tr:hover{ background-color: rgba(67,97,238,0.03); }
-    .auto-update{ display:flex; align-items:center; margin-bottom:10px; }
-    .update-indicator{ width:10px; height:10px; border-radius:50%; margin-right:8px; }
-    .updating{ background-color:#28a745; }
-    .paused{ background-color:#dc3545; }
-    .btn{ padding:8px 16px; border:none; border-radius:4px; cursor:pointer; font-weight:600; }
-    .btn-primary{ background:#4361ee; color:white; }
-    .btn-danger{ background:#e63946; color:white; }
-    .modal{ display:none; position:fixed; z-index:1000; left:0; top:0; width:100%; height:100%; overflow:auto; background-color: rgba(0,0,0,0.5); }
-    .modal-content{ background:white; margin:5% auto; padding:25px; border-radius:10px; width:80%; max-width:900px; position:relative; }
-    .close{ color:#aaa; float:right; font-size:28px; font-weight:bold; cursor:pointer; }
-    .close:hover{ color:#000; }
-    .packet-details{ background:#f8f9fa; padding:20px; border-radius:8px; margin-top:15px; font-family:monospace; white-space: pre-wrap; max-height:60vh; overflow:auto; }
-    .view-content-link{ color:#0b63ff; text-decoration:underline; cursor:pointer; margin-left:8px; font-weight:600; }
-    .open-window-link{ color:#0b63ff; text-decoration:underline; cursor:pointer; margin-left:10px; font-weight:600; font-size:0.95em; }
-    .preview{ color:#333; }
-
-    /* Colors for new/old rows per your request */
-    .new-traffic { background-color: #c8f7c5 !important; }   /* brighter green for newest */
-    .old-traffic { background-color: #d7c0a6 !important; }   /* brown-ish for previous rows */
-
-    @media (max-width:800px) { .data-table th,.data-table td{ padding:8px 10px; font-size:13px; } }
-  </style>
+  <!-- Link to external CSS (place file at static/css/dashboard.css) -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
 </head>
 <body>
   <div class="header">
@@ -63,19 +35,16 @@
       <button id="refresh-btn" class="btn btn-primary">Refresh Now</button>
     </div>
 
+    <!-- Small banner that appears on new interceptions -->
+    <div id="new-banner" class="new-banner" style="display:none; cursor:pointer;">New interceptions</div>
+
     <h2>Network Traffic</h2>
     <div id="network-traffic-container">
       {% if network_traffic %}
         <table class="data-table" id="network-table">
           <thead>
             <tr>
-              <th>Timestamp</th>
-              <th>Source</th>
-              <th>Destination</th>
-              <th>Protocol</th>
-              <!-- 5th column: Content preview + view link -->
-              <th>Content (preview)</th>
-              <th>Service</th>
+              <th>Timestamp</th><th>Source</th><th>Destination</th><th>Protocol</th><th>Content (preview)</th><th>Service</th>
             </tr>
           </thead>
           <tbody id="network-traffic-body">
@@ -132,13 +101,14 @@
   </div>
 
   <script>
-    // lastSeenId from server initial data (null if none)
+    // State
     let lastSeenId = {{ (network_traffic[0].id if network_traffic else 'null')|tojson }};
+    let clickedId = null;               // id of the packet the user clicked (keeps it white)
     let autoUpdateEnabled = true;
     let updateInterval = null;
 
-    // Audio beep using Web Audio API (short beep)
-    function playBeep(duration = 120, frequency = 880, volume = 0.08) {
+    // Louder beep for new interceptions (bigger volume/duration)
+    function playLoudBeep(duration = 260, frequency = 1200, volume = 0.25) {
       try {
         const AudioContext = window.AudioContext || window.webkitAudioContext;
         const ctx = new AudioContext();
@@ -152,106 +122,95 @@
         o.start();
         setTimeout(() => {
           o.stop();
-          // close context after short delay
-          setTimeout(() => ctx.close(), 50);
+          setTimeout(()=>ctx.close(), 80);
         }, duration);
       } catch (e) {
-        // fallback: do nothing if WebAudio not available
         console.warn('Beep failed:', e);
       }
     }
 
-    // Safe parse of server JSON-encoded string (tojson used server side)
-    function safeParseContent(raw) {
-      if (raw === null || raw === undefined) return '';
+    // base64 -> utf8 decode helper
+    function base64ToUtf8(b64) {
       try {
-        if (typeof raw === 'string') {
-          return JSON.parse(raw);
-        }
-      } catch(e) { /* fallback */ }
-      return raw;
+        // atob may throw for non-base64
+        const binary = atob(b64);
+        const len = binary.length;
+        const bytes = new Uint8Array(len);
+        for (let i = 0; i < len; i++) bytes[i] = binary.charCodeAt(i);
+        const decoder = new TextDecoder('utf-8', { fatal: false });
+        return decoder.decode(bytes);
+      } catch (e) {
+        // fallback: return original string
+        return b64;
+      }
     }
 
-    function showModalWithContent(str) {
+    // Show modal with decoded content (safe text)
+    function showModalWithContent(contentB64) {
       const modal = document.getElementById('packetModal');
       const cnt = document.getElementById('modal-content');
-      cnt.textContent = str;
+      // contentB64 might be base64 or plain text. Try base64 decode first.
+      let decoded = contentB64;
+      // detect likely base64: consists of base64 chars and length mod 4 == 0 (simple heuristic)
+      if (typeof contentB64 === 'string' && /^[A-Za-z0-9+\/=\\s]+$/.test(contentB64) && (contentB64.length % 4 === 0)) {
+        decoded = base64ToUtf8(contentB64);
+      }
+      cnt.textContent = decoded;
       modal.style.display = 'block';
     }
 
-    function openContentInWindow(str) {
+    // Open content in new window (decoded)
+    function openContentInWindow(contentB64) {
+      const decoded = (typeof contentB64 === 'string') ? ( (contentB64.length % 4 === 0) ? base64ToUtf8(contentB64) : contentB64 ) : String(contentB64);
       const w = window.open('', '_blank');
-      if (!w) {
-        showModalWithContent(str);
-        return;
-      }
-      const esc = (s) => s.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');
-      const contentHtml = `<pre style="white-space:pre-wrap;font-family:monospace;">${esc(str)}</pre>`;
+      if (!w) { showModalWithContent(contentB64); return; }
+      const esc = (s) => String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');
+      const contentHtml = `<pre style="white-space:pre-wrap;font-family:monospace;">${esc(decoded)}</pre>`;
       w.document.open();
       w.document.write(`<html><head><title>Packet Content</title></head><body>${contentHtml}</body></html>`);
       w.document.close();
     }
 
-    // Delegated click handler for view/open links
-    document.addEventListener('click', function(e) {
-      const el = e.target;
-      if (!el) return;
-      if (el.classList && el.classList.contains('view-content-link')) {
-        const raw = el.getAttribute('data-content');
-        const content = safeParseContent(raw);
-        showModalWithContent(content);
-      }
-      if (el.classList && el.classList.contains('open-window-link')) {
-        const raw = el.getAttribute('data-content');
-        const content = safeParseContent(raw);
-        openContentInWindow(content);
-      }
-    });
+    // Banner show/hide
+    const bannerEl = document.getElementById('new-banner');
+    function showNewBanner(timeout = 6000) {
+      bannerEl.style.display = 'block';
+      bannerEl.onclick = () => { bannerEl.style.display = 'none'; };
+      // auto-hide
+      clearTimeout(bannerEl._hideTimer);
+      bannerEl._hideTimer = setTimeout(() => { bannerEl.style.display = 'none'; }, timeout);
+    }
 
-    // Close modal
-    document.getElementById('modal-close').addEventListener('click', () => {
-      document.getElementById('packetModal').style.display = 'none';
-    });
-    window.addEventListener('click', function(event) {
-      const modal = document.getElementById('packetModal');
-      if (event.target === modal) modal.style.display = 'none';
-    });
-
-    // highlight handling: make previous rows brown and new row green
-    function markRowsForNew(newId) {
-      // remove existing classes first
-      document.querySelectorAll('#network-traffic-body tr').forEach(tr => {
-        tr.classList.remove('new-traffic');
-        tr.classList.remove('old-traffic');
-      });
-
-      // mark all rows except the newest as old (brown)
-      document.querySelectorAll('#network-traffic-body tr').forEach(tr => {
+    // Mark rows: unread -> green; clicked -> white (only clickedId stays white)
+    function styleRowsAfterUpdate(newData) {
+      // newData is ordered newest first. We preserve clickedId if present
+      const tbody = document.getElementById('network-traffic-body');
+      if (!tbody) return;
+      tbody.querySelectorAll('tr').forEach(tr => {
         const id = tr.getAttribute('data-id');
-        if (!id) return;
-        if (String(id) !== String(newId)) {
-          tr.classList.add('old-traffic');
+        tr.classList.remove('unread', 'clicked');
+        if (id && String(id) === String(clickedId)) {
+          tr.classList.add('clicked');
+        } else {
+          tr.classList.add('unread');
         }
       });
-
-      // mark the newest row as new (green)
-      const newest = document.querySelector(`#network-traffic-body tr[data-id="${newId}"]`);
-      if (newest) newest.classList.add('new-traffic');
     }
 
-    // Called when a new packet arrives (first element id changed)
-    function notifyNewPacket(newId) {
-      // play sound only if lastSeenId is set (not initial load)
-      if (lastSeenId !== null) {
-        playBeep(); // sound alert
+    // When a new packet arrives (firstId changed)
+    function handleNewPacket(firstId) {
+      // play louder beep
+      if (lastSeenId !== null) { // do not play on initial load
+        playLoudBeep();
       }
-      // mark rows colors
-      markRowsForNew(newId);
-      // update lastSeenId
-      lastSeenId = Number(newId);
+      // show banner
+      showNewBanner();
+      // mark all rows unread (green) except clicked one stays clicked
+      styleRowsAfterUpdate();
+      lastSeenId = Number(firstId);
     }
 
-    // Build / refresh table
+    // Build table rows
     function updateTable(data) {
       const container = document.getElementById('network-traffic-container');
       if (!data || data.length === 0) {
@@ -259,7 +218,7 @@
         return;
       }
 
-      // Ensure table present
+      // Ensure table exists
       if (!document.getElementById('network-traffic-body')) {
         container.innerHTML = `
           <table class="data-table" id="network-table">
@@ -273,36 +232,41 @@
       const tbody = document.getElementById('network-traffic-body');
       tbody.innerHTML = '';
 
-      data.forEach(traffic => {
+      data.forEach(item => {
         const tr = document.createElement('tr');
-        if (traffic.id !== undefined && traffic.id !== null) tr.setAttribute('data-id', traffic.id);
+        if (item.id !== undefined && item.id !== null) tr.setAttribute('data-id', item.id);
 
+        // timestamp
         const tdTime = document.createElement('td');
-        tdTime.textContent = (typeof traffic.timestamp === 'string') ? traffic.timestamp : (traffic.timestamp ? new Date(traffic.timestamp).toLocaleString() : '');
+        tdTime.textContent = (typeof item.timestamp === 'string') ? item.timestamp : (item.timestamp ? new Date(item.timestamp).toLocaleString() : '');
         tr.appendChild(tdTime);
 
-        const tdSource = document.createElement('td'); tdSource.textContent = traffic.source || ''; tr.appendChild(tdSource);
-        const tdDest = document.createElement('td'); tdDest.textContent = traffic.dest || ''; tr.appendChild(tdDest);
-        const tdProto = document.createElement('td'); tdProto.textContent = traffic.protocol || ''; tr.appendChild(tdProto);
+        // source/dest/proto
+        const tdSource = document.createElement('td'); tdSource.textContent = item.source || ''; tr.appendChild(tdSource);
+        const tdDest = document.createElement('td'); tdDest.textContent = item.dest || ''; tr.appendChild(tdDest);
+        const tdProto = document.createElement('td'); tdProto.textContent = item.protocol || ''; tr.appendChild(tdProto);
 
+        // content preview column (5th)
         const tdContent = document.createElement('td'); tdContent.className = 'content-cell';
-        if (traffic.content) {
-          // traffic.content is expected to be the whole packet content (or base64 string)
-          let contentStr;
-          try {
-            // If content is base64 (detect typical base64 characters), we won't auto-decode here;
-            // we display what server returned (server should send base64 or text consistently).
-            contentStr = (typeof traffic.content === 'string') ? traffic.content : JSON.stringify(traffic.content);
-          } catch (e) {
-            contentStr = String(traffic.content);
+        if (item.content) {
+          let contentStr = (typeof item.content === 'string') ? item.content : JSON.stringify(item.content);
+          // keep base64 string as is for display; preview first 100 chars of decoded if decode possible
+          let previewText = contentStr;
+          // try decode preview if looks base64
+          if (typeof contentStr === 'string' && contentStr.length % 4 === 0 && /^[A-Za-z0-9+\/=\\s]+$/.test(contentStr)) {
+            try {
+              previewText = base64ToUtf8(contentStr).substring(0, 100);
+            } catch (e) { previewText = contentStr.substring(0, 100); }
+          } else {
+            previewText = contentStr.substring(0, 100);
           }
 
           if (contentStr.length > 100) {
-            const preview = document.createElement('span'); preview.className = 'preview'; preview.textContent = contentStr.substring(0,100) + '...'; tdContent.appendChild(preview);
+            const preview = document.createElement('span'); preview.className = 'preview'; preview.textContent = previewText + '...'; tdContent.appendChild(preview);
             const viewLink = document.createElement('span'); viewLink.className = 'view-content-link'; viewLink.setAttribute('data-content', JSON.stringify(contentStr)); viewLink.textContent = 'View full content'; tdContent.appendChild(viewLink);
             const openLink = document.createElement('span'); openLink.className = 'open-window-link'; openLink.setAttribute('data-content', JSON.stringify(contentStr)); openLink.textContent = 'Open in window'; tdContent.appendChild(openLink);
           } else {
-            const preview = document.createElement('span'); preview.className = 'preview'; preview.textContent = contentStr; tdContent.appendChild(preview);
+            const preview = document.createElement('span'); preview.className = 'preview'; preview.textContent = previewText; tdContent.appendChild(preview);
             const openLink = document.createElement('span'); openLink.className = 'open-window-link'; openLink.setAttribute('data-content', JSON.stringify(contentStr)); openLink.textContent = 'Open in window'; tdContent.appendChild(openLink);
           }
         } else {
@@ -310,30 +274,93 @@
         }
         tr.appendChild(tdContent);
 
-        const tdService = document.createElement('td'); tdService.textContent = traffic.service || ''; tr.appendChild(tdService);
+        // service
+        const tdService = document.createElement('td'); tdService.textContent = item.service || ''; tr.appendChild(tdService);
 
         tbody.appendChild(tr);
       });
 
-      // Check for new top item
+      // preserve clickedId if still present; style rows accordingly
+      styleRowsAfterUpdate(data);
+
+      // detect new top item
       const first = data[0];
       const firstId = first && first.id ? Number(first.id) : null;
       if (lastSeenId === null) {
-        // initial load: set lastSeenId but don't play sound
         lastSeenId = firstId;
-        markRowsForNew(firstId); // highlight initial top
       } else if (firstId !== null && firstId !== lastSeenId) {
-        notifyNewPacket(firstId);
+        // new packets arrived
+        // reset clickedId so all show green except any one the user clicks later
+        // (user insisted clicked one white; we keep clickedId only when user clicks)
+        clickedId = null;
+        handleNewPacket(firstId);
       }
     }
 
-    // Fetch latest data from server
+    // Event delegation: clicks on view/open links
+    document.addEventListener('click', function(e) {
+      const el = e.target;
+      if (!el) return;
+      if (el.classList && el.classList.contains('view-content-link')) {
+        const raw = el.getAttribute('data-content');
+        let content = raw;
+        try { content = JSON.parse(raw); } catch(e) {}
+        // mark this row as clicked-white and others unread-green
+        const tr = el.closest('tr');
+        if (tr) {
+          clickedId = tr.getAttribute('data-id');
+          // update classes
+          document.querySelectorAll('#network-traffic-body tr').forEach(row => {
+            row.classList.remove('clicked', 'unread');
+            if (row.getAttribute('data-id') === clickedId) row.classList.add('clicked');
+            else row.classList.add('unread');
+          });
+        }
+        // decode base64 if possible
+        let decoded = content;
+        if (typeof content === 'string' && content.length % 4 === 0 && /^[A-Za-z0-9+\/=\\s]+$/.test(content)) {
+          decoded = base64ToUtf8(content);
+        }
+        showModalWithContent(decoded);
+      }
+
+      if (el.classList && el.classList.contains('open-window-link')) {
+        const raw = el.getAttribute('data-content');
+        let content = raw;
+        try { content = JSON.parse(raw); } catch(e) {}
+        // mark clicked
+        const tr = el.closest('tr');
+        if (tr) {
+          clickedId = tr.getAttribute('data-id');
+          document.querySelectorAll('#network-traffic-body tr').forEach(row => {
+            row.classList.remove('clicked', 'unread');
+            if (row.getAttribute('data-id') === clickedId) row.classList.add('clicked');
+            else row.classList.add('unread');
+          });
+        }
+        // open in window (decoded)
+        if (typeof content === 'string' && content.length % 4 === 0 && /^[A-Za-z0-9+\/=\\s]+$/.test(content)) {
+          openContentInWindow(base64ToUtf8(content));
+        } else {
+          openContentInWindow(String(content));
+        }
+      }
+    });
+
+    // Close modal
+    document.getElementById('modal-close').addEventListener('click', () => {
+      document.getElementById('packetModal').style.display = 'none';
+    });
+    window.addEventListener('click', function(event) {
+      const modal = document.getElementById('packetModal');
+      if (event.target === modal) modal.style.display = 'none';
+    });
+
+    // Fetch latest data
     function fetchLatestData() {
       fetch('/api/network-traffic/latest')
         .then(resp => resp.json())
-        .then(data => {
-          updateTable(data);
-        })
+        .then(data => updateTable(data))
         .catch(err => console.error('fetch error', err));
     }
 
@@ -352,7 +379,7 @@
 
     document.getElementById('refresh-btn').addEventListener('click', fetchLatestData);
 
-    // Start auto-update and initial load
+    // init
     startAutoUpdate();
     fetchLatestData();
   </script>
