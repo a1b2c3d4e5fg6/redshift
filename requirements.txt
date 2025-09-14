@@ -1,5 +1,12 @@
 Flask==2.3.3
 Flask-SQLAlchemy==3.0.5
-psycopg2-binary==2.9.9
+psycopg2-binary==2.9.7      # or psycopg[binary]==3.* if you switch to psycopg3
 Werkzeug==2.3.7
+Flask-SocketIO==5.3.6
+python-engineio==4.7.1
+python-socketio==5.8.0
 gunicorn==21.2.0
+eventlet>=0.33.0
+greenlet>=3.1.1,<4
+setuptools>=65.0.0
+wheel
