@@ -6,12 +6,23 @@ import time
 import sqlite3
 import os
 from pathlib import Path
+from functools import wraps
 
 app = Flask(__name__)
 app.secret_key = 'your-secret-key-here'  # Change this to a random secret key
 
 # Use SQLite instead of PostgreSQL to avoid driver issues
 DB_PATH = Path('app.db')
+
+# Login required decorator
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session:
+            flash('Please log in to access this page.', 'error')
+            return redirect(url_for('login', next=request.url))
+        return f(*args, **kwargs)
+    return decorated_function
 
 # Database setup
 def init_db():
@@ -110,9 +121,14 @@ def register():
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
+    # If user is already logged in, redirect to dashboard
+    if 'user_id' in session:
+        return redirect(url_for('dashboard'))
+    
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
+        next_page = request.args.get('next')
         
         conn = get_db()
         user = conn.execute(
@@ -125,17 +141,17 @@ def login():
             session['user_id'] = user['id']
             session['username'] = user['username']
             flash('Login successful!', 'success')
-            return redirect(url_for('dashboard'))
+            
+            # Redirect to the requested page or dashboard
+            return redirect(next_page or url_for('dashboard'))
         else:
             flash('Invalid username or password', 'error')
     
     return render_template('login.html')
 
 @app.route('/dashboard')
+@login_required  # This decorator ensures user is logged in
 def dashboard():
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
-    
     # Get the latest network traffic data
     conn = get_db()
     network_traffic = conn.execute(
@@ -193,6 +209,7 @@ def receive_network_traffic():
 
 # API endpoint to get latest network traffic
 @app.route('/api/network-traffic/latest')
+@login_required  # Protect API endpoints too
 def get_latest_network_traffic():
     try:
         conn = get_db()
