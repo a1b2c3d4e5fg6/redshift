@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 import os
 
 app = Flask(__name__)
-app.secret_key = os.environ.get('SECRET_KEY', 'your-secret-key-change-in-production')
+app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
 
 # Hardcoded PostgreSQL connection details
 DB_USER = 'red_db_user'
@@ -20,8 +20,8 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
 
-# Initialize SocketIO
-socketio = SocketIO(app, cors_allowed_origins="*")
+# Initialize SocketIO with eventlet for production
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
 
 # User model
 class User(db.Model):
@@ -196,5 +196,14 @@ def logout():
     flash('You have been logged out', 'info')
     return redirect(url_for('login'))
 
+# Health check endpoint for Render
+@app.route('/health')
+def health_check():
+    return jsonify({'status': 'healthy', 'timestamp': datetime.utcnow().isoformat()})
+
+# For Gunicorn production deployment
+application = app
+
 if __name__ == '__main__':
-    socketio.run(app, debug=True)
+    # For development
+    socketio.run(app, debug=True, host='0.0.0.0', port=5000)
