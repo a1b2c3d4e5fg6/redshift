@@ -1,12 +1,12 @@
-from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
+from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify, Response
 from flask_sqlalchemy import SQLAlchemy
-from flask_socketio import SocketIO, emit
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timezone
-import os
+import json
+import time
 
 app = Flask(__name__)
-app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
+app.secret_key = 'your-secret-key-here'  # Change this to a random secret key
 
 # Hardcoded PostgreSQL connection details
 DB_USER = 'red_db_user'
@@ -19,9 +19,6 @@ app.config['SQLALCHEMY_DATABASE_URI'] = f'postgresql://{DB_USER}:{DB_PASSWORD}@{
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
-
-# Initialize SocketIO with eventlet for production
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
 
 # User model
 class User(db.Model):
@@ -70,16 +67,6 @@ with app.app_context():
         admin.set_password('admin123')
         db.session.add(admin)
         db.session.commit()
-
-# SocketIO events
-@socketio.on('connect')
-def handle_connect():
-    print('Client connected')
-    emit('connected', {'data': 'Connected to server'})
-
-@socketio.on('disconnect')
-def handle_disconnect():
-    print('Client disconnected')
 
 # Routes
 @app.route('/')
@@ -181,14 +168,22 @@ def receive_network_traffic():
         db.session.add(new_traffic)
         db.session.commit()
         
-        # Emit the new data to all connected clients
-        socketio.emit('new_network_data', new_traffic.to_dict())
-        
         return jsonify({'message': 'Network traffic data stored successfully'}), 200
         
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': f'Failed to store data: {str(e)}'}), 500
+
+# API endpoint to get latest network traffic
+@app.route('/api/network-traffic/latest')
+def get_latest_network_traffic():
+    # Get the latest network traffic data
+    latest_traffic = NetworkTraffic.query.order_by(NetworkTraffic.timestamp.desc()).limit(50).all()
+    
+    # Convert to list of dictionaries
+    traffic_data = [t.to_dict() for t in latest_traffic]
+    
+    return jsonify(traffic_data)
 
 @app.route('/logout')
 def logout():
@@ -205,5 +200,4 @@ def health_check():
 application = app
 
 if __name__ == '__main__':
-    # For development
-    socketio.run(app, debug=True, host='0.0.0.0', port=5000)
+    app.run(debug=True, host='0.0.0.0', port=5000)
