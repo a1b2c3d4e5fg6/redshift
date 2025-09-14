@@ -3,17 +3,30 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timezone
 import json
 import time
-import sqlite3
 import os
 import re
-from pathlib import Path
+import psycopg2
+from psycopg2.extras import RealDictCursor
 from functools import wraps
 
 app = Flask(__name__)
-app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-key')  # Use environment variable for security
+app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-key')
 
-# Use SQLite instead of PostgreSQL to avoid driver issues
-DB_PATH = Path('app.db')
+# Database configuration - using PostgreSQL instead of SQLite
+def get_db_connection():
+    try:
+        # For Render.com PostgreSQL database
+        conn = psycopg2.connect(
+            host=os.environ.get('DB_HOST', 'localhost'),
+            database=os.environ.get('DB_NAME', 'red_db'),
+            user=os.environ.get('DB_USER', 'postgres'),
+            password=os.environ.get('DB_PASSWORD', ''),
+            port=os.environ.get('DB_PORT', '5432')
+        )
+        return conn
+    except Exception as e:
+        print(f"Database connection error: {e}")
+        return None
 
 # Login required decorator
 def login_required(f):
@@ -24,16 +37,25 @@ def login_required(f):
             return redirect(url_for('login', next=request.url))
         
         # Verify user still exists in database
-        conn = get_db()
-        user = conn.execute(
-            'SELECT id FROM users WHERE id = ?',
-            (session['user_id'],)
-        ).fetchone()
-        conn.close()
-        
-        if not user:
-            session.clear()
-            flash('Your account no longer exists.', 'error')
+        conn = get_db_connection()
+        if conn:
+            try:
+                cur = conn.cursor(cursor_factory=RealDictCursor)
+                cur.execute('SELECT id FROM users WHERE id = %s', (session['user_id'],))
+                user = cur.fetchone()
+                cur.close()
+                conn.close()
+                
+                if not user:
+                    session.clear()
+                    flash('Your account no longer exists.', 'error')
+                    return redirect(url_for('login'))
+            except Exception as e:
+                print(f"Error checking user: {e}")
+                flash('Database error. Please try again.', 'error')
+                return redirect(url_for('login'))
+        else:
+            flash('Database connection error. Please try again.', 'error')
             return redirect(url_for('login'))
             
         return f(*args, **kwargs)
@@ -41,25 +63,29 @@ def login_required(f):
 
 # Database setup
 def init_db():
+    conn = get_db_connection()
+    if not conn:
+        print("Failed to connect to database")
+        return
+        
     try:
-        conn = sqlite3.connect(DB_PATH)
-        c = conn.cursor()
+        cur = conn.cursor()
         
         # Create users table
-        c.execute('''
+        cur.execute('''
             CREATE TABLE IF NOT EXISTS users (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                username TEXT UNIQUE NOT NULL,
-                email TEXT UNIQUE NOT NULL,
+                id SERIAL PRIMARY KEY,
+                username VARCHAR(50) UNIQUE NOT NULL,
+                email VARCHAR(100) UNIQUE NOT NULL,
                 password_hash TEXT NOT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
         
         # Create network_traffic table
-        c.execute('''
+        cur.execute('''
             CREATE TABLE IF NOT EXISTS network_traffic (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id SERIAL PRIMARY KEY,
                 timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 source TEXT NOT NULL,
                 dest TEXT NOT NULL,
@@ -71,47 +97,44 @@ def init_db():
         ''')
         
         # Create default admin user if not exists
-        c.execute("SELECT id FROM users WHERE username = 'admin'")
-        if not c.fetchone():
+        cur.execute("SELECT id FROM users WHERE username = 'admin'")
+        if not cur.fetchone():
             password_hash = generate_password_hash('admin123')
-            c.execute(
-                "INSERT INTO users (username, email, password_hash) VALUES (?, ?, ?)",
+            cur.execute(
+                "INSERT INTO users (username, email, password_hash) VALUES (%s, %s, %s)",
                 ('admin', 'admin@example.com', password_hash)
             )
         
         conn.commit()
+        cur.close()
         conn.close()
-        print(f"Database initialized successfully at {DB_PATH.absolute()}")
+        print("Database initialized successfully")
     except Exception as e:
         print(f"Error initializing database: {e}")
 
 # Initialize database
 init_db()
 
-# Database connection helper
-def get_db():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
-
 # Email validation function
 def is_valid_email(email):
     pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
     return re.match(pattern, email) is not None
 
-# Debug route to check database contents (remove in production)
+# Debug route to check database contents
 @app.route('/debug/users')
 def debug_users():
     try:
-        conn = get_db()
-        users = conn.execute('SELECT * FROM users').fetchall()
+        conn = get_db_connection()
+        if not conn:
+            return jsonify({'error': 'Database connection failed'}), 500
+            
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur.execute('SELECT * FROM users')
+        users = cur.fetchall()
+        cur.close()
         conn.close()
         
-        users_list = []
-        for user in users:
-            users_list.append(dict(user))
-        
-        return jsonify(users_list)
+        return jsonify([dict(user) for user in users])
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -157,51 +180,50 @@ def register():
             return render_template('register.html')
         
         # Check if user already exists
-        conn = get_db()
-        user = conn.execute(
-            'SELECT id FROM users WHERE username = ? OR email = ?',
-            (username, email)
-        ).fetchone()
-        
-        if user:
-            flash('Username or email already exists!', 'error')
-            conn.close()
+        conn = get_db_connection()
+        if not conn:
+            flash('Database connection error. Please try again.', 'error')
             return render_template('register.html')
-        
-        # Create new user
-        password_hash = generate_password_hash(password)
+            
         try:
-            conn.execute(
-                'INSERT INTO users (username, email, password_hash) VALUES (?, ?, ?)',
+            cur = conn.cursor(cursor_factory=RealDictCursor)
+            cur.execute(
+                'SELECT id FROM users WHERE username = %s OR email = %s',
+                (username, email)
+            )
+            user = cur.fetchone()
+            
+            if user:
+                flash('Username or email already exists!', 'error')
+                cur.close()
+                conn.close()
+                return render_template('register.html')
+            
+            # Create new user
+            password_hash = generate_password_hash(password)
+            cur.execute(
+                'INSERT INTO users (username, email, password_hash) VALUES (%s, %s, %s) RETURNING id',
                 (username, email, password_hash)
             )
+            
+            new_user_id = cur.fetchone()['id']
             conn.commit()
             
-            # Get the newly created user ID
-            new_user = conn.execute(
-                'SELECT id FROM users WHERE username = ?',
-                (username,)
-            ).fetchone()
-            
+            cur.close()
             conn.close()
             
-            if new_user:
-                print(f"New user created: {username} (ID: {new_user['id']})")
-                flash('Registration successful! Please log in.', 'success')
-                return redirect(url_for('login'))
-            else:
-                flash('Registration failed. Please try again.', 'error')
-                return render_template('register.html')
+            print(f"New user created: {username} (ID: {new_user_id})")
+            flash('Registration successful! Please log in.', 'success')
+            return redirect(url_for('login'))
                 
-        except sqlite3.IntegrityError as e:
-            flash('Username or email already exists!', 'error')
-            conn.close()
-            print(f"Integrity error during registration: {e}")
-            return render_template('register.html')
         except Exception as e:
             flash('An error occurred during registration. Please try again.', 'error')
-            conn.close()
             print(f"Error during registration: {e}")
+            try:
+                cur.close()
+                conn.close()
+            except:
+                pass
             return render_template('register.html')
     
     return render_template('register.html')
@@ -211,17 +233,20 @@ def login():
     # If user is already logged in, redirect to dashboard
     if 'user_id' in session:
         # Verify user still exists in database
-        conn = get_db()
-        user = conn.execute(
-            'SELECT id FROM users WHERE id = ?',
-            (session['user_id'],)
-        ).fetchone()
-        conn.close()
-        
-        if user:
-            return redirect(url_for('dashboard'))
-        else:
-            session.clear()
+        conn = get_db_connection()
+        if conn:
+            try:
+                cur = conn.cursor(cursor_factory=RealDictCursor)
+                cur.execute('SELECT id FROM users WHERE id = %s', (session['user_id'],))
+                user = cur.fetchone()
+                cur.close()
+                conn.close()
+                
+                if user:
+                    return redirect(url_for('dashboard'))
+            except:
+                pass
+        session.clear()
     
     if request.method == 'POST':
         username = request.form['username'].strip()
@@ -232,59 +257,82 @@ def login():
             flash('Please enter both username and password', 'error')
             return render_template('login.html')
         
-        conn = get_db()
-        user = conn.execute(
-            'SELECT * FROM users WHERE username = ? OR email = ?',
-            (username, username)  # Allow login with either username or email
-        ).fetchone()
-        conn.close()
-        
-        if user and check_password_hash(user['password_hash'], password):
-            session['user_id'] = user['id']
-            session['username'] = user['username']
-            flash('Login successful!', 'success')
+        conn = get_db_connection()
+        if not conn:
+            flash('Database connection error. Please try again.', 'error')
+            return render_template('login.html')
             
-            # Redirect to the requested page or dashboard
-            return redirect(next_page or url_for('dashboard'))
-        else:
-            flash('Invalid username/email or password', 'error')
+        try:
+            cur = conn.cursor(cursor_factory=RealDictCursor)
+            cur.execute(
+                'SELECT * FROM users WHERE username = %s OR email = %s',
+                (username, username)  # Allow login with either username or email
+            )
+            user = cur.fetchone()
+            cur.close()
+            conn.close()
+            
+            if user and check_password_hash(user['password_hash'], password):
+                session['user_id'] = user['id']
+                session['username'] = user['username']
+                flash('Login successful!', 'success')
+                
+                # Redirect to the requested page or dashboard
+                return redirect(next_page or url_for('dashboard'))
+            else:
+                flash('Invalid username/email or password', 'error')
+        except Exception as e:
+            flash('Database error. Please try again.', 'error')
+            print(f"Login error: {e}")
     
     return render_template('login.html')
 
 @app.route('/dashboard')
-@login_required  # This decorator ensures user is logged in
+@login_required
 def dashboard():
     # Get the latest network traffic data
-    conn = get_db()
-    network_traffic = conn.execute(
-        'SELECT * FROM network_traffic ORDER BY timestamp DESC LIMIT 50'
-    ).fetchall()
-    conn.close()
-    
-    # Convert string timestamps to datetime objects
-    formatted_traffic = []
-    for traffic in network_traffic:
-        traffic_dict = dict(traffic)
-        # Convert timestamp if it's a string
-        if isinstance(traffic_dict['timestamp'], str):
-            try:
-                traffic_dict['timestamp'] = datetime.strptime(
-                    traffic_dict['timestamp'], '%Y-%m-%d %H:%M:%S'
-                )
-            except ValueError:
-                # If the format is different, try another common format
+    conn = get_db_connection()
+    if not conn:
+        flash('Database connection error. Please try again.', 'error')
+        return redirect(url_for('login'))
+        
+    try:
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur.execute('SELECT * FROM network_traffic ORDER BY timestamp DESC LIMIT 50')
+        network_traffic = cur.fetchall()
+        cur.close()
+        conn.close()
+        
+        # Convert string timestamps to datetime objects
+        formatted_traffic = []
+        for traffic in network_traffic:
+            traffic_dict = dict(traffic)
+            # Convert timestamp if it's a string
+            if isinstance(traffic_dict['timestamp'], str):
                 try:
-                    traffic_dict['timestamp'] = datetime.fromisoformat(
-                        traffic_dict['timestamp'].replace('Z', '+00:00')
+                    traffic_dict['timestamp'] = datetime.strptime(
+                        traffic_dict['timestamp'], '%Y-%m-%d %H:%M:%S'
                     )
                 except ValueError:
-                    # If all else fails, keep the original string
-                    pass
-        formatted_traffic.append(traffic_dict)
-    
-    return render_template('dashboard.html', 
-                         username=session['username'], 
-                         network_traffic=formatted_traffic)
+                    # If the format is different, try another common format
+                    try:
+                        traffic_dict['timestamp'] = datetime.fromisoformat(
+                            traffic_dict['timestamp'].replace('Z', '+00:00')
+                        )
+                    except ValueError:
+                        # If all else fails, keep the original string
+                        pass
+            formatted_traffic.append(traffic_dict)
+        
+        return render_template('dashboard.html', 
+                             username=session['username'], 
+                             network_traffic=formatted_traffic)
+    except Exception as e:
+        flash('Error loading dashboard data.', 'error')
+        print(f"Dashboard error: {e}")
+        return render_template('dashboard.html', 
+                             username=session['username'], 
+                             network_traffic=[])
 
 # API endpoint for receiving network traffic
 @app.route('/api/network-traffic', methods=['POST'])
@@ -295,13 +343,18 @@ def receive_network_traffic():
         if not data:
             return jsonify({'error': 'No data provided'}), 400
         
-        conn = get_db()
-        conn.execute(
-            'INSERT INTO network_traffic (source, dest, protocol, service, content, timestamp) VALUES (?, ?, ?, ?, ?, ?)',
+        conn = get_db_connection()
+        if not conn:
+            return jsonify({'error': 'Database connection failed'}), 500
+            
+        cur = conn.cursor()
+        cur.execute(
+            'INSERT INTO network_traffic (source, dest, protocol, service, content, timestamp) VALUES (%s, %s, %s, %s, %s, %s)',
             (data.get('source'), data.get('dest'), data.get('protocol'), 
              data.get('service'), data.get('content'), data.get('timestamp', datetime.now(timezone.utc).isoformat()))
         )
         conn.commit()
+        cur.close()
         conn.close()
         
         return jsonify({'message': 'Network traffic data stored successfully'}), 200
@@ -311,13 +364,17 @@ def receive_network_traffic():
 
 # API endpoint to get latest network traffic
 @app.route('/api/network-traffic/latest')
-@login_required  # Protect API endpoints too
+@login_required
 def get_latest_network_traffic():
     try:
-        conn = get_db()
-        latest_traffic = conn.execute(
-            'SELECT * FROM network_traffic ORDER BY timestamp DESC LIMIT 50'
-        ).fetchall()
+        conn = get_db_connection()
+        if not conn:
+            return jsonify({'error': 'Database connection failed'}), 500
+            
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur.execute('SELECT * FROM network_traffic ORDER BY timestamp DESC LIMIT 50')
+        latest_traffic = cur.fetchall()
+        cur.close()
         conn.close()
         
         # Convert to list of dictionaries
