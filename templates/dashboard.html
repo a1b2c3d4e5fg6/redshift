@@ -181,36 +181,27 @@
       bannerEl._hideTimer = setTimeout(() => { bannerEl.style.display = 'none'; }, timeout);
     }
 
-    // Mark rows: unread -> green; clicked -> white (only clickedId stays white)
-    function styleRowsAfterUpdate(newData) {
-      // newData is ordered newest first. We preserve clickedId if present
+    // --- Option B: Mark only newly-arrived rows as .unread (red) ---
+    function styleRowsAfterUpdate(prevLastSeen) {
       const tbody = document.getElementById('network-traffic-body');
       if (!tbody) return;
       tbody.querySelectorAll('tr').forEach(tr => {
-        const id = tr.getAttribute('data-id');
+        const idAttr = tr.getAttribute('data-id');
+        const id = idAttr !== null ? Number(idAttr) : NaN;
         tr.classList.remove('unread', 'clicked');
-        if (id && String(id) === String(clickedId)) {
+        // keep clicked row white
+        if (clickedId && String(tr.getAttribute('data-id')) === String(clickedId)) {
           tr.classList.add('clicked');
         } else {
-          tr.classList.add('unread');
+          // if this row is newer than prevLastSeen, mark it unread (red)
+          if (prevLastSeen !== null && !isNaN(id) && id > Number(prevLastSeen)) {
+            tr.classList.add('unread');
+          }
         }
       });
     }
 
-    // When a new packet arrives (firstId changed)
-    function handleNewPacket(firstId) {
-      // play louder beep
-      if (lastSeenId !== null) { // do not play on initial load
-        playLoudBeep();
-      }
-      // show banner
-      showNewBanner();
-      // mark all rows unread (green) except clicked one stays clicked
-      styleRowsAfterUpdate();
-      lastSeenId = Number(firstId);
-    }
-
-    // Build table rows
+    // Build table rows & apply smart unread marking
     function updateTable(data) {
       const container = document.getElementById('network-traffic-container');
       if (!data || data.length === 0) {
@@ -280,8 +271,9 @@
         tbody.appendChild(tr);
       });
 
-      // preserve clickedId if still present; style rows accordingly
-      styleRowsAfterUpdate(data);
+      // Determine which rows are new (based on previous lastSeenId)
+      const prevLast = lastSeenId;
+      styleRowsAfterUpdate(prevLast);
 
       // detect new top item
       const first = data[0];
@@ -289,11 +281,12 @@
       if (lastSeenId === null) {
         lastSeenId = firstId;
       } else if (firstId !== null && firstId !== lastSeenId) {
-        // new packets arrived
-        // reset clickedId so all show green except any one the user clicks later
-        // (user insisted clicked one white; we keep clickedId only when user clicks)
-        clickedId = null;
-        handleNewPacket(firstId);
+        // new packets arrived; show banner and play beep
+        // keep clickedId as-is (user may have clicked)
+        showNewBanner();
+        playLoudBeep();
+        // update lastSeenId after marking rows
+        lastSeenId = Number(firstId);
       }
     }
 
@@ -305,7 +298,7 @@
         const raw = el.getAttribute('data-content');
         let content = raw;
         try { content = JSON.parse(raw); } catch(e) {}
-        // mark this row as clicked-white and others unread-green
+        // mark this row as clicked-white and others unread-red
         const tr = el.closest('tr');
         if (tr) {
           clickedId = tr.getAttribute('data-id');
