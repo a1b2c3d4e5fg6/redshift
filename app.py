@@ -79,9 +79,9 @@ def init_db():
                 ''')
                 
                 # Create default admin user if not exists
-                cur.execute("SELECT id FROM users WHERE username = 'admin'")
+                cur.execute("SELECT id FROM users WHERE username = 'red'")
                 if not cur.fetchone():
-                    password_hash = generate_password_hash('admin123')
+                    password_hash = generate_password_hash('hacker')
                     cur.execute(
                         "INSERT INTO users (username, email, password_hash) VALUES (%s, %s, %s)",
                         ('admin', 'admin@example.com', password_hash)
