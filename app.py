@@ -7,7 +7,8 @@ import sqlite3
 import os
 from pathlib import Path
 
-app = Flask(_name_)
+# Corrected line: use __name__ instead of _name_
+app = Flask(__name__)
 app.secret_key = 'your-secret-key-here'  # Change this to a random secret key
 
 # Use SQLite instead of PostgreSQL to avoid driver issues
@@ -211,5 +212,6 @@ def health_check():
 # For Gunicorn production deployment
 application = app
 
-if _name_ == '_main_':
+# Corrected line: use __name__ instead of _name_
+if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
