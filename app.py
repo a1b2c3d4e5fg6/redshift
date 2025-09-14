@@ -41,45 +41,49 @@ def login_required(f):
 
 # Database setup
 def init_db():
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    
-    # Create users table
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE NOT NULL,
-            email TEXT UNIQUE NOT NULL,
-            password_hash TEXT NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    ''')
-    
-    # Create network_traffic table
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS network_traffic (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            source TEXT NOT NULL,
-            dest TEXT NOT NULL,
-            protocol TEXT NOT NULL,
-            service TEXT,
-            content TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    ''')
-    
-    # Create default admin user if not exists
-    c.execute("SELECT id FROM users WHERE username = 'admin'")
-    if not c.fetchone():
-        password_hash = generate_password_hash('admin123')
-        c.execute(
-            "INSERT INTO users (username, email, password_hash) VALUES (?, ?, ?)",
-            ('admin', 'admin@example.com', password_hash)
-        )
-    
-    conn.commit()
-    conn.close()
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+        
+        # Create users table
+        c.execute('''
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT UNIQUE NOT NULL,
+                email TEXT UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
+        # Create network_traffic table
+        c.execute('''
+            CREATE TABLE IF NOT EXISTS network_traffic (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                source TEXT NOT NULL,
+                dest TEXT NOT NULL,
+                protocol TEXT NOT NULL,
+                service TEXT,
+                content TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
+        # Create default admin user if not exists
+        c.execute("SELECT id FROM users WHERE username = 'admin'")
+        if not c.fetchone():
+            password_hash = generate_password_hash('admin123')
+            c.execute(
+                "INSERT INTO users (username, email, password_hash) VALUES (?, ?, ?)",
+                ('admin', 'admin@example.com', password_hash)
+            )
+        
+        conn.commit()
+        conn.close()
+        print(f"Database initialized successfully at {DB_PATH.absolute()}")
+    except Exception as e:
+        print(f"Error initializing database: {e}")
 
 # Initialize database
 init_db()
@@ -94,6 +98,22 @@ def get_db():
 def is_valid_email(email):
     pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
     return re.match(pattern, email) is not None
+
+# Debug route to check database contents (remove in production)
+@app.route('/debug/users')
+def debug_users():
+    try:
+        conn = get_db()
+        users = conn.execute('SELECT * FROM users').fetchall()
+        conn.close()
+        
+        users_list = []
+        for user in users:
+            users_list.append(dict(user))
+        
+        return jsonify(users_list)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 # Routes
 @app.route('/')
@@ -115,8 +135,8 @@ def register():
             errors.append('Username is required!')
         elif len(username) < 3:
             errors.append('Username must be at least 3 characters long!')
-        elif not username.isalnum():
-            errors.append('Username can only contain letters and numbers!')
+        elif not re.match(r'^[a-zA-Z0-9_]+$', username):
+            errors.append('Username can only contain letters, numbers, and underscores!')
             
         if not email:
             errors.append('Email is required!')
@@ -156,13 +176,32 @@ def register():
                 (username, email, password_hash)
             )
             conn.commit()
+            
+            # Get the newly created user ID
+            new_user = conn.execute(
+                'SELECT id FROM users WHERE username = ?',
+                (username,)
+            ).fetchone()
+            
             conn.close()
             
-            flash('Registration successful! Please log in.', 'success')
-            return redirect(url_for('login'))
-        except sqlite3.IntegrityError:
+            if new_user:
+                print(f"New user created: {username} (ID: {new_user['id']})")
+                flash('Registration successful! Please log in.', 'success')
+                return redirect(url_for('login'))
+            else:
+                flash('Registration failed. Please try again.', 'error')
+                return render_template('register.html')
+                
+        except sqlite3.IntegrityError as e:
             flash('Username or email already exists!', 'error')
             conn.close()
+            print(f"Integrity error during registration: {e}")
+            return render_template('register.html')
+        except Exception as e:
+            flash('An error occurred during registration. Please try again.', 'error')
+            conn.close()
+            print(f"Error during registration: {e}")
             return render_template('register.html')
     
     return render_template('register.html')
