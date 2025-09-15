@@ -1,381 +1,349 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
+
 <head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>RedShift Event Dashboard</title>
-  <!-- Link to external CSS (place file at static/css/dashboard.css) -->
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RedShift Event Dashboard</title>
+    <link rel="stylesheet" href="{{url_for('static',filename='css/dashboard.css')}}">
 </head>
+
 <body>
-  <div class="header">
-    <h1>Intercepted Data Dashboard</h1>
-    <div>
-      <span>Welcome, {{ username }}!</span>
-      <a href="{{ url_for('logout') }}" class="btn btn-danger" style="margin-left:15px;">Logout</a>
-    </div>
-  </div>
-
-  <div class="container">
-    {% with messages = get_flashed_messages(with_categories=true) %}
-      {% if messages %}
-        {% for category, message in messages %}
-          <div class="alert alert-{{ category }}">{{ message }}</div>
-        {% endfor %}
-      {% endif %}
-    {% endwith %}
-
-    <div class="auto-update">
-      <span id="update-indicator" class="update-indicator updating"></span>
-      <span id="update-status">Auto-update enabled (updates every 5 seconds)</span>
-      <button id="toggle-update" class="btn" style="margin-left:15px;">Pause Updates</button>
-    </div>
-
-    <div class="action-buttons">
-  <button id="refresh-btn" class="btn btn-primary">Refresh Now</button>
-  
-</div>
-
-    <!-- Small banner that appears on new interceptions -->
-    <div id="new-banner" class="new-banner" style="display:none; cursor:pointer;">New interceptions</div>
-
-    <h2>Network Traffic intercepted</h2>
-    <div id="network-traffic-container">
-      {% if network_traffic %}
-        <table border="1" class="data-table" id="network-table">
-          <thead>
-            <tr>
-              <th>Timestamp</th><th>Source</th><th>Destination</th><th>Protocol</th><th>Content (preview)</th><th>Service</th>
-            </tr>
-          </thead>
-          <tbody id="network-traffic-body">
-            {% for traffic in network_traffic %}
-            <tr data-id="{{ traffic.id }}">
-              <td>
-                {% if traffic.timestamp is string %}
-                  {{ traffic.timestamp }}
-                {% else %}
-                  {{ traffic.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}
-                {% endif %}
-              </td>
-              <td>{{ traffic.source }}</td>
-              <td>{{ traffic.dest }}</td>
-              <td>{{ traffic.protocol }}</td>
-
-              <td class="content-cell">
-                {% if traffic.content %}
-                  {% set raw = traffic.content %}
-                  {% if raw|length > 100 %}
-                    <span class="preview">{{ raw[:100] }}...</span>
-                    <span class="view-content-link" data-content='{{ raw|tojson|safe }}'>View full content</span>
-                    <span class="open-window-link" data-content='{{ raw|tojson|safe }}' title="Open content in new window">Open in window</span>
-                  {% else %}
-                    <span class="preview">{{ raw }}</span>
-                    <span class="open-window-link" data-content='{{ raw|tojson|safe }}' title="Open content in new window">Open in window</span>
-                  {% endif %}
-                {% else %}
-                  No content
-                {% endif %}
-              </td>
-
-              <td>{{ traffic.service }}</td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      {% else %}
-        <div class="no-data">
-          <h2>No network traffic data available</h2>
-          <p>Wait for data from your Kali machine.</p>
+    <div class="" header>
+        <h1>Intercepted data Dashboard</h1>
+        <div>
+            <span>Welcom, {{username}}!</span>
+            <a href="{{url_for(logout)}}" class="btn btn-danger" style="margin-left: 15px;">Logout</a>
         </div>
-      {% endif %}
     </div>
-  </div>
+    <div class="container">
+        {% with messages = get_flashed_messages(with_categories=true)%}
+        {% if messages %}
+        {% for category, message in messages %}
+        <div class="alert alert-{{category }}">{{message}}</div>
+        {% endfor %}
+        {% endif %}
+        {% endwith %}
+        <div class="auto-update">
+            <span id="update-indicator" class="update-indicator updating"></span>
+            <span id="update-status">auto-update enabled (updates every 5 seconds)</span>
+            <button id="toggle-update" class="btn" style="margin-left: 15px;">Pause Updates</button>
+        </div>
 
-  <!-- Packet Content Modal -->
-  <div id="packetModal" class="modal">
-    <div class="modal-content">
-      <span class="close" id="modal-close">&times;</span>
-      <h3>Packet Content Details</h3>
-      <div class="packet-details" id="modal-content"></div>
+        <div class="action-buttons">
+            <button id="refresh-btn" class="btn btn-primary">Refresh Now</button>
+        </div>
+        <div id="new-banner" class="new-banner" style="display: none; cursor:pointer">New interceptions </div>
+
+        <h2>Network Traffic Intercepted</h2>
+        <div id="network-traffic-container">
+            {% if network-traffic %}
+            <table class="data-table" id="network-table">
+                <thead>
+                    <tr>
+                        <th>Timestamp</th>
+                        <th>Source</th>
+                        <th>Destination</th>
+                        <th>protocol</th>
+                        <th>Content (preview)</th>
+                        <th>Service</th>
+                    </tr>
+                </thead>
+                <tbody id="network-traffic-body">
+                    {% for traffic in network-traffic %}
+                    <tr data-id="{{ traffic-body}}">
+                        <td>
+                            {% if traffic.timestamp is string %}
+                            {{ traffic.timestamp}}
+                            {% else %}
+                            {{traffic.timestamp.strftime('%Y-%d %H:%M:%S') }}
+                            {% endif %}
+                        </td>
+                        <td>{{ traffic.source}}</td>
+                        <td>{{traffic.dest }}</td>
+                        <td>{{ traffic.protocol }}</td>
+
+                        <td class="content-cell">
+                            {% if traffic.content %}
+                            {% set raw = traffic.content %}
+                            {% if raw|length > 100 %}
+                            <span class="preview">{{ raw[:100]}}...</span>
+                            <span class="view-content-link" data-content='{{ raw|tojson|safe }}'>View full content
+                            </span>
+                            <span class="open-window-link" data-content='{{ raw|tojson|safe }}'
+                                title="Open content in new window">Open in window</span>
+                            {% else %}
+                            <span class="preview">{{ raw }}</span>
+                            <span open-window-link data-content='{{ raw|tojson|safe }}'
+                                title="Open content in new window">Open in window</span>
+                            {% endif %}
+                            {% else %}
+                            No content
+                            {% endif %}
+                        </td>
+                        <td>{{traffic.service }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div class="no-data">
+                <h2>No network-traffic data availabel</h2>
+                <p>wait for data from your kali machine.</p>
+            </div>
+            {% endif %}
+        </div>
     </div>
-  </div>
 
-  <script>
-    // State
-    let lastSeenId = {{ (network_traffic[0].id if network_traffic else 'null')|tojson }};
-    let clickedId = null;               // id of the packet the user clicked (keeps it white)
-    let autoUpdateEnabled = true;
-    let updateInterval = null;
+    <div id="packetModal" class="modal">
+        <div class="modal-content">
+            <span class="close" id="modal-close">&times;</span>
+            <h3>Packet content details</h3>
+            <div class="packet-details" id="modal-content"></div>
+        </div>
+    </div>
 
-    // Louder beep for new interceptions (bigger volume/duration)
-    function playLoudBeep(duration = 260, frequency = 1200, volume = 0.25) {
-      try {
-        const AudioContext = window.AudioContext || window.webkitAudioContext;
-        const ctx = new AudioContext();
-        const o = ctx.createOscillator();
-        const g = ctx.createGain();
-        o.type = "sine";
-        o.frequency.value = frequency;
-        g.gain.value = volume;
-        o.connect(g);
-        g.connect(ctx.destination);
-        o.start();
-        setTimeout(() => {
-          o.stop();
-          setTimeout(()=>ctx.close(), 80);
-        }, duration);
-      } catch (e) {
-        console.warn('Beep failed:', e);
-      }
-    }
+    <script>
+        let lastSeenId = {{ (network_traffic[0].id if network_traffic else 'null')| tojson }};
+        let clickedId = null;
+        let autoUpdateEnabled = true;
+        let updateInterval = null;
 
-    // base64 -> utf8 decode helper
-    function base64ToUtf8(b64) {
-      try {
-        // atob may throw for non-base64
-        const binary = atob(b64);
-        const len = binary.length;
-        const bytes = new Uint8Array(len);
-        for (let i = 0; i < len; i++) bytes[i] = binary.charCodeAt(i);
-        const decoder = new TextDecoder('utf-8', { fatal: false });
-        return decoder.decode(bytes);
-      } catch (e) {
-        // fallback: return original string
-        return b64;
-      }
-    }
-
-    // Show modal with decoded content (safe text)
-    function showModalWithContent(contentB64) {
-      const modal = document.getElementById('packetModal');
-      const cnt = document.getElementById('modal-content');
-      // contentB64 might be base64 or plain text. Try base64 decode first.
-      let decoded = contentB64;
-      // detect likely base64: consists of base64 chars and length mod 4 == 0 (simple heuristic)
-      if (typeof contentB64 === 'string' && /^[A-Za-z0-9+\/=\\s]+$/.test(contentB64) && (contentB64.length % 4 === 0)) {
-        decoded = base64ToUtf8(contentB64);
-      }
-      cnt.textContent = decoded;
-      modal.style.display = 'block';
-    }
-
-    // Open content in new window (decoded)
-    function openContentInWindow(contentB64) {
-      const decoded = (typeof contentB64 === 'string') ? ( (contentB64.length % 4 === 0) ? base64ToUtf8(contentB64) : contentB64 ) : String(contentB64);
-      const w = window.open('', '_blank');
-      if (!w) { showModalWithContent(contentB64); return; }
-      const esc = (s) => String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');
-      const contentHtml = `<pre style="white-space:pre-wrap;font-family:monospace;">${esc(decoded)}</pre>`;
-      w.document.open();
-      w.document.write(`<html><head><title>Packet Content</title></head><body>${contentHtml}</body></html>`);
-      w.document.close();
-    }
-
-    // Banner show/hide
-    const bannerEl = document.getElementById('new-banner');
-    function showNewBanner(timeout = 6000) {
-      bannerEl.style.display = 'block';
-      bannerEl.onclick = () => { bannerEl.style.display = 'none'; };
-      // auto-hide
-      clearTimeout(bannerEl._hideTimer);
-      bannerEl._hideTimer = setTimeout(() => { bannerEl.style.display = 'none'; }, timeout);
-    }
-
-    // --- Option B: Mark only newly-arrived rows as .unread (red) ---
-    function styleRowsAfterUpdate(prevLastSeen) {
-      const tbody = document.getElementById('network-traffic-body');
-      if (!tbody) return;
-      tbody.querySelectorAll('tr').forEach(tr => {
-        const idAttr = tr.getAttribute('data-id');
-        const id = idAttr !== null ? Number(idAttr) : NaN;
-        tr.classList.remove('unread', 'clicked');
-        // keep clicked row white
-        if (clickedId && String(tr.getAttribute('data-id')) === String(clickedId)) {
-          tr.classList.add('clicked');
-        } else {
-          // if this row is newer than prevLastSeen, mark it unread (red)
-          if (prevLastSeen !== null && !isNaN(id) && id > Number(prevLastSeen)) {
-            tr.classList.add('unread');
-          }
-        }
-      });
-    }
-
-    // Build table rows & apply smart unread marking
-    function updateTable(data) {
-      const container = document.getElementById('network-traffic-container');
-      if (!data || data.length === 0) {
-        container.innerHTML = `<div class="no-data"><h2>No network traffic data available</h2><p>Wait for data from your Kali machine.</p></div>`;
-        return;
-      }
-
-      // Ensure table exists
-      if (!document.getElementById('network-traffic-body')) {
-        container.innerHTML = `
-          <table class="data-table" id="network-table">
-            <thead>
-              <tr><th>Timestamp</th><th>Source</th><th>Destination</th><th>Protocol</th><th>Content (preview)</th><th>Service</th></tr>
-            </thead>
-            <tbody id="network-traffic-body"></tbody>
-          </table>`;
-      }
-
-      const tbody = document.getElementById('network-traffic-body');
-      tbody.innerHTML = '';
-
-      data.forEach(item => {
-        const tr = document.createElement('tr');
-        if (item.id !== undefined && item.id !== null) tr.setAttribute('data-id', item.id);
-
-        // timestamp
-        const tdTime = document.createElement('td');
-        tdTime.textContent = (typeof item.timestamp === 'string') ? item.timestamp : (item.timestamp ? new Date(item.timestamp).toLocaleString() : '');
-        tr.appendChild(tdTime);
-
-        // source/dest/proto
-        const tdSource = document.createElement('td'); tdSource.textContent = item.source || ''; tr.appendChild(tdSource);
-        const tdDest = document.createElement('td'); tdDest.textContent = item.dest || ''; tr.appendChild(tdDest);
-        const tdProto = document.createElement('td'); tdProto.textContent = item.protocol || ''; tr.appendChild(tdProto);
-
-        // content preview column (5th)
-        const tdContent = document.createElement('td'); tdContent.className = 'content-cell';
-        if (item.content) {
-          let contentStr = (typeof item.content === 'string') ? item.content : JSON.stringify(item.content);
-          // keep base64 string as is for display; preview first 100 chars of decoded if decode possible
-          let previewText = contentStr;
-          // try decode preview if looks base64
-          if (typeof contentStr === 'string' && contentStr.length % 4 === 0 && /^[A-Za-z0-9+\/=\\s]+$/.test(contentStr)) {
+        function playLoudBeep(duration = 260, frequency = 1200, volume = 0.25) {
             try {
-              previewText = base64ToUtf8(contentStr).substring(0, 100);
-            } catch (e) { previewText = contentStr.substring(0, 100); }
-          } else {
-            previewText = contentStr.substring(0, 100);
-          }
-
-          if (contentStr.length > 100) {
-            const preview = document.createElement('span'); preview.className = 'preview'; preview.textContent = previewText + '...'; tdContent.appendChild(preview);
-            const viewLink = document.createElement('span'); viewLink.className = 'view-content-link'; viewLink.setAttribute('data-content', JSON.stringify(contentStr)); viewLink.textContent = 'View full content'; tdContent.appendChild(viewLink);
-            const openLink = document.createElement('span'); openLink.className = 'open-window-link'; openLink.setAttribute('data-content', JSON.stringify(contentStr)); openLink.textContent = 'Open in window'; tdContent.appendChild(openLink);
-          } else {
-            const preview = document.createElement('span'); preview.className = 'preview'; preview.textContent = previewText; tdContent.appendChild(preview);
-            const openLink = document.createElement('span'); openLink.className = 'open-window-link'; openLink.setAttribute('data-content', JSON.stringify(contentStr)); openLink.textContent = 'Open in window'; tdContent.appendChild(openLink);
-          }
-        } else {
-          tdContent.textContent = 'No content';
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                const ctx = new AudioContext();
+                const o = ctx.createOscillator();
+                const g = ctx.createGain();
+                o.type = "sine";
+                o.frequency.value = frequency;
+                g.gain.value = volume;
+                o.connct(g);
+                g.connct(ctx.destination);
+                o.start();
+                setTimeout(() => {
+                    o.stop();
+                    setTimeout(() => ctx.close(), 80)
+                }, duration);
+            } catch (e) {
+                console.warn('Beep failed', e);
+            }
         }
-        tr.appendChild(tdContent);
 
-        // service
-        const tdService = document.createElement('td'); tdService.textContent = item.service || ''; tr.appendChild(tdService);
-
-        tbody.appendChild(tr);
-      });
-
-      // Determine which rows are new (based on previous lastSeenId)
-      const prevLast = lastSeenId;
-      styleRowsAfterUpdate(prevLast);
-
-      // detect new top item
-      const first = data[0];
-      const firstId = first && first.id ? Number(first.id) : null;
-      if (lastSeenId === null) {
-        lastSeenId = firstId;
-      } else if (firstId !== null && firstId !== lastSeenId) {
-        // new packets arrived; show banner and play beep
-        // keep clickedId as-is (user may have clicked)
-        showNewBanner();
-        playLoudBeep();
-        // update lastSeenId after marking rows
-        lastSeenId = Number(firstId);
-      }
-    }
-
-    // Event delegation: clicks on view/open links
-    document.addEventListener('click', function(e) {
-      const el = e.target;
-      if (!el) return;
-      if (el.classList && el.classList.contains('view-content-link')) {
-        const raw = el.getAttribute('data-content');
-        let content = raw;
-        try { content = JSON.parse(raw); } catch(e) {}
-        // mark this row as clicked-white and others unread-red
-        const tr = el.closest('tr');
-        if (tr) {
-          clickedId = tr.getAttribute('data-id');
-          // update classes
-          document.querySelectorAll('#network-traffic-body tr').forEach(row => {
-            row.classList.remove('clicked', 'unread');
-            if (row.getAttribute('data-id') === clickedId) row.classList.add('clicked');
-            else row.classList.add('unread');
-          });
+        function base64ToUtf8(b64) {
+            try {
+                const binary = atob(b64);
+                const len = binary.length;
+                const bytes = new Uint8Array(len);
+                for (let i = 0; i < len; i++) bytes[i] = binary.charCodeAt(i);
+                const decoder = new TextDecoder('utf-8', { fatal: false });
+                return decoder.decode(bytes);
+            } catch (e) {
+                return b64;
+            }
         }
-        // decode base64 if possible
-        let decoded = content;
-        if (typeof content === 'string' && content.length % 4 === 0 && /^[A-Za-z0-9+\/=\\s]+$/.test(content)) {
-          decoded = base64ToUtf8(content);
+        function showModalWithContent(contentB64) {
+            const modal = document.getElementById('paketModal');
+            const cnt = document.getElementById('modal-content');
+
+            let decoded = contentB64;
+
+            if (typeof contentB64 === 'string' && /^[A-Za-z0-9+\/=\\s]+$/.test(contentB64) && (contentB64.length % 4 === 0)) {
+                decoded = base64ToUtf8(contentB64);
+            }
+            cnt.textcontent = decoded;
+            modal.style.display = 'block';
         }
-        showModalWithContent(decoded);
-      }
-
-      if (el.classList && el.classList.contains('open-window-link')) {
-        const raw = el.getAttribute('data-content');
-        let content = raw;
-        try { content = JSON.parse(raw); } catch(e) {}
-        // mark clicked
-        const tr = el.closest('tr');
-        if (tr) {
-          clickedId = tr.getAttribute('data-id');
-          document.querySelectorAll('#network-traffic-body tr').forEach(row => {
-            row.classList.remove('clicked', 'unread');
-            if (row.getAttribute('data-id') === clickedId) row.classList.add('clicked');
-            else row.classList.add('unread');
-          });
+        function openContentInWindow(contentB64) {
+            const decoded = (typeof contentB64 === 'string') ? ((contentB64.length % 4 === 0) ? base64ToUtf8(contentB64) : contentB64) : String(contentB64);
+            const w = window.open('', '_blank');
+            if (!w) { showModalWithContent(contentB64); return; }
+            const esc = (s) => String(s).replaceAll('&', '$amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+            const contentHtml = '<pre style="white-space:pre-wrap;font-family:monospace;">${esc(decoded)}</pre>';
+            w.document.open();
+            w.document.write('<html><head><title>Packet Content</title></head><body>${contentHtml}</body></html>');
+            w.document.close();
         }
-        // open in window (decoded)
-        if (typeof content === 'string' && content.length % 4 === 0 && /^[A-Za-z0-9+\/=\\s]+$/.test(content)) {
-          openContentInWindow(base64ToUtf8(content));
-        } else {
-          openContentInWindow(String(content));
+
+        const bannerEl = document.getElementById('new-banner');
+        function showNewBanner(timeout = 6000) {
+            bannerEl.style.display = 'block';
+            bannerEl.onclick = () => { bannerEl.style.display = 'none'; };
+
+            clearTimeout(bannerEl._hideTimer);
+            bannerEl._hideTimer = setTimeout(() => { bannerEl.style.display = 'none' }, timeout);
         }
-      }
-    });
 
-    // Close modal
-    document.getElementById('modal-close').addEventListener('click', () => {
-      document.getElementById('packetModal').style.display = 'none';
-    });
-    window.addEventListener('click', function(event) {
-      const modal = document.getElementById('packetModal');
-      if (event.target === modal) modal.style.display = 'none';
-    });
+        function styleRowsAfterUpdate(preLastSeen) {
+            const tbody = document.getElementById('network-traffic-body');
+            if (!tbody) return;
+            tbody.querySelectorAll('tr').forEach(tr => {
+                const idAttr = tr.getAttribute('date-id');
+                const id = idAttr !== null ? Number(idAttr) : NaN;
+                tr.classList.remove('unread', 'clicked');
+                if (clickedId && String(tr.getAttribute('data-id')) === String(clickedId)) {
+                    tr.classList.add('clicked');
+                } else {
+                    if (prevLastSeen !== null && !isNaN(id) && id > Number(preLastSeen)) {
+                        tr.classList.add('unread');
+                    }
+                }
+            });
+        }
+        function updateTable(data) {
+            const container = document.getElementById('network-traffic-container');
+            if (!data || data.length === 0) {
+                container.innerHTML = '<div class=" no-data"><h2>No network Traffic data available</h2><p>Wait for data from your kali machine.</p></div>';
+                return;
+            }
 
-    // Fetch latest data
-    function fetchLatestData() {
-      fetch('/api/network-traffic/latest')
-        .then(resp => resp.json())
-        .then(data => updateTable(data))
-        .catch(err => console.error('fetch error', err));
-    }
+            if (!document.getElementById('network-traffic-body')) {
+                container.innerHTML = `
+        <table class="data-table" id="network-table">
+                <thead> 
+                  <tr><th>Timestamp</th><th>Service</th><th>Destination</th><th>Protocol</th><th>Content (preview)</th><th>Service</th></tr>
+                </thead>
+                <tbody id="network-traffic-body"></tbody>
+        </table>`;
+            }
+            const tbody = document.getElementById('network-traffic-body');
+            tbody.innerHTML = '';
 
-    // Auto-update controls
-    function startAutoUpdate() { if (updateInterval) clearInterval(updateInterval); updateInterval = setInterval(fetchLatestData, 5000); }
-    function stopAutoUpdate() { if (updateInterval) clearInterval(updateInterval); updateInterval = null; }
+            data.forEach(item => {
+                const tr = document.createElement('tr');
+                if (item.id !== undefined && item.id !== null) tr.setAttribute('dara-id', item.id);
 
-    document.getElementById('toggle-update').addEventListener('click', function() {
-      autoUpdateEnabled = !autoUpdateEnabled;
-      const indicator = document.getElementById('update-indicator');
-      const status = document.getElementById('update-status');
-      const btn = document.getElementById('toggle-update');
-      if (autoUpdateEnabled) { indicator.className = 'update-indicator updating'; status.textContent = 'Auto-update enabled (updates every 5 seconds)'; btn.textContent = 'Pause Updates'; startAutoUpdate(); }
-      else { indicator.className = 'update-indicator paused'; status.textContent = 'Auto-update paused'; btn.textContent = 'Resume Updates'; stopAutoUpdate(); }
-    });
+                const tdTime = document.createElement('td');
+                tdTime.textContent = (typeof item.timestamp === 'string') ? item.timestamp : (item.timestamp ? new Dare(item.timestamp).toLocaleString() : '');
+                tr.appendChild(tdTime);
 
-    document.getElementById('refresh-btn').addEventListener('click', fetchLatestData);
+                const tdSource = document.createElement('td'); tdSource.textContent = item.source || ''; tr.appendChild(tdSource);
+                const tdDest = document.createElement('td'); tdDest.textContent = item.dest || ''; tr.appendChild(tdDest);
+                const tdProto = document.createElement('td'); tdProto.textContent = item.protocol || ''; tr.appendChild(tdProto);
 
-    // init
-    startAutoUpdate();
-    fetchLatestData();
-  </script>
+                const tdContent = document.createElement('td'); tdContent.className = 'content-cell';
+                if (item.content) {
+                    let contentStr = (typeof item.content === 'string') ? item.content : Json.stringify(item.content);
+                    let previewText = contentStr;
+                    if (typeof contentStr === 'string' && contentStr.length % 4 === 0 && /^[A-Za-z0-9+\/=\\s]+$/.test(contentStr)) {
+                        try {
+                            previewText = base64ToUtf8(contentStr).substring(0, 100);
+                        } catch (e) { previewText = contentStr.substring(0, 100); }
+                    } else {
+                        previewText = contentStr.substring(0, 100);
+                    }
+
+                    if (contentStr.length > 100) {
+                        const preview = document.createElement('span'); preview.className = 'preview'; preview.textContent = previewText + '...'; tdContent.appendChild(preview);
+                        const viewLink = document.createElement('span'); viewLink.className = 'view-content-link'; viewLink.setAttribute('data-content', JSON.stringify(contentStr)); viewLink.textContent = 'View full content'; tdContent.appendChild(viewLink);
+                        const openLink = document.createElement('span'); openLink.className = 'open-window-link'; openLink.setAttribute('data-content', JSON.stringify(contentStr)); openLink.textContent = 'open in window '; tdContent.appendChild(openLink);
+                    } else {
+                        tdContent.textContent = 'No content';
+                    }
+                    tr.appendChild(tdContent);
+
+                    const tdService = document.createElement('td'); tdService.textContent = item.service || ''; tr, appendChild(tdService);
+                    tbody.appendChild(tr);
+                }
+            });
+
+            const prevlast = lastSeenId;
+            styleRowsAfterUpdate(prevlast);
+
+            const first = data[0];
+            const firstId = first && first.id ? Number(first.id) : null;
+            if (lastSeenId === null) {
+                lastSeenId = firstId;
+            } else if (firstId !== null && firstId !== lastSeenId) {
+                showNewBanner();
+                playLoudBeep();
+
+                lastSeenId = Number(firstId);
+            }
+        }
+
+        document.addEventListener('click', function (e) {
+            const el = e.target;
+            if (!el) return;
+            if (el.classList && el.classList.contains('view-content-link')) {
+                const raw = el.getAttribute('data-content');
+                let content = raw;
+                try { content = JSON.parse(raw); } catch (e) { }
+
+                const tr = el.closest('tr');
+                if (tr) {
+                    clickedId = tr.getAttribute('data-id');
+
+                    document.querySelectorAll('#network-traffic-body tr').forEach(row => {
+                        row.classList.remove('clicked', 'unread');
+                        if (row.getAttribute('data-id') === clickedId) row.classList.add('clicked');
+                        else row.classList.add('unread');
+                    });
+                }
+
+                let decoded = content;
+                if (typeof content === 'string' && content.length % 4 === 0 && /^[A-Za-z0-9+\/=\\s]+$/.test(content)) {
+                    decoded = base64ToUtf8(content);
+                }
+                showModalWithContent(decoded);
+            }
+
+            if (el.classList && el.classList.contains('open-window-link')) {
+                const raw = el.getAttribute('data-content');
+                let content = raw;
+                try {
+                    content = JSON.parse(raw);
+                } catch (e) { }
+
+                const tr = el.closest('tr');
+                if (tr) {
+                    clickedId = tr.getAttribute('data-id');
+                    document.querySelectorAll('#network-traffic-body tr').forEach(row => {
+                        row.classList.remove('clicked', 'unread');
+                        if (row.getAttribute('data-id') === clickedId) row.classList.add('clicked');
+                        else row.classList.add('unread');
+                    });
+                }
+                if (typeof content === 'string' && content.length % 4 === 0 && /^[A-Za-z0-9+\/=\\s]+$/.test(content)) {
+                    openContentInWindow(base64ToUtf8(content));
+                } else {
+                    openContentInWindow(String(content));
+                }
+            }
+        });
+
+        document.getElementById('modal-close').addEventListener('click', () => {
+            document.getElementById('packetModal').style.display = 'none';
+        });
+        window.addEventListener('click', function (event) {
+            const modal = document.getElementById('packetModal');
+            if (event.target === modal) modal.style.display = 'none';
+        });
+
+        function fetchLatestData() {
+            fetch('/api/network-traffic/latest')
+                .then(resp => resp.json())
+                .then(data => updateTable(data))
+                .catch(err => console.error('fetch error', err));
+        }
+
+        function startAutoUpdate() { if (updateInterval) clearInterval(updateInterval); updateInterval = setInterval(fetchLatestData, 5000); }
+        function stopAutoUpdate() { if (updateInterval) clearInterval(updateInterval); updateInterval = null; }
+
+        document.getElementById('toggle-update').addEventListener('click', function () {
+            autoUpdateEnabled = !autoUpdateEnabled;
+            const indicator = document.getElementById('udate-indicator');
+            const status = document.getElementById('update-status');
+            const btn = document.getElementById('toggle-update');
+            if (autoUpdateEnabled) { indicator.className = 'update-indicator updating'; status.textContent = 'Auto-update enabled (updates every 5 seconds)'; btn.textContent = 'Pause Updates'; startAutoUpdate(); }
+            else { indicator.className = 'update-indicator paused'; status.textContent = 'Auto-update paused'; btn.textContent = 'Resume Updates'; stopAutoUpdate(); }
+        });
+
+        document.getElementById('refresh-btn').addEventListener('click', fetchLatestData);
+
+        startAutoUpdate();
+        fetchLatestData();
+    </script>
 </body>
+
 </html>
