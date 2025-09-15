@@ -9,15 +9,9 @@ import os
 import re
 from pathlib import Path
 from functools import wraps
-from werkzeug.middleware.proxy_fix import ProxyFix
-import ssl
-from OpenSSL import crypto
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-key')
-
-# Handle proxy headers for HTTPS
-app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 
 # PostgreSQL database configuration - enforce SSL
 DATABASE_URL = os.environ.get('DATABASE_URL', 'postgresql://red_db_user:08PP2B2lSy2GAD5H7Jp51XRbrzldYOZB@dpg-d32s8gur433s73bavsvg-a.oregon-postgres.render.com/red_db')
@@ -26,14 +20,6 @@ if 'sslmode' not in DATABASE_URL:
         DATABASE_URL += '&sslmode=require'
     else:
         DATABASE_URL += '?sslmode=require'
-
-# Force HTTPS in production
-@app.before_request
-def force_https():
-    if os.environ.get('FLASK_ENV') == 'production':
-        if request.headers.get('X-Forwarded-Proto') == 'http':
-            url = request.url.replace('http://', 'https://', 1)
-            return redirect(url, code=301)
 
 # Login required decorator
 def login_required(f):
@@ -124,35 +110,6 @@ def get_db():
 def is_valid_email(email):
     pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
     return re.match(pattern, email) is not None
-
-# Generate self-signed SSL certificate
-def generate_self_signed_cert(cert_file, key_file):
-    # Create a key pair
-    key = crypto.PKey()
-    key.generate_key(crypto.TYPE_RSA, 2048)
-    
-    # Create a self-signed cert
-    cert = crypto.X509()
-    cert.get_subject().C = "US"
-    cert.get_subject().ST = "State"
-    cert.get_subject().L = "City"
-    cert.get_subject().O = "Organization"
-    cert.get_subject().OU = "Organizational Unit"
-    cert.get_subject().CN = "localhost"
-    cert.set_serial_number(1000)
-    cert.gmtime_adj_notBefore(0)
-    cert.gmtime_adj_notAfter(10*365*24*60*60)  # 10 years
-    cert.set_issuer(cert.get_subject())
-    cert.set_pubkey(key)
-    cert.sign(key, 'sha256')
-    
-    # Save certificate and key
-    with open(cert_file, "wb") as f:
-        f.write(crypto.dump_certificate(crypto.FILETYPE_PEM, cert))
-    with open(key_file, "wb") as f:
-        f.write(crypto.dump_privatekey(crypto.FILETYPE_PEM, key))
-    
-    print(f"Generated self-signed certificate: {cert_file}")
 
 # Debug route to check database contents (remove in production)
 @app.route('/debug/users')
@@ -430,24 +387,6 @@ init_db()
 application = app
 
 if __name__ == '__main__':
-    # SSL context for development
-    ssl_context = None
-    
-    # Create ssl directory if it doesn't exist
-    Path("ssl").mkdir(exist_ok=True)
-    
-    # Generate self-signed certificates if they don't exist
-    cert_path = "ssl/cert.pem"
-    key_path = "ssl/key.pem"
-    
-    if not os.path.exists(cert_path) or not os.path.exists(key_path):
-        generate_self_signed_cert(cert_path, key_path)
-    
-    ssl_context = (cert_path, key_path)
-    
-    app.run(
-        debug=True, 
-        host='0.0.0.0', 
-        port=5000, 
-        ssl_context=ssl_context
-    )
+    # In production, Render handles SSL termination
+    # We only need to run the app without SSL
+    app.run(debug=False, host='0.0.0.0', port=5000)
