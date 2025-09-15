@@ -3,7 +3,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timezone
 import json
 import time
-import psycopg2 as psycopg
+import psycopg2
 from psycopg2 import sql
 import os
 import re
@@ -100,7 +100,7 @@ def init_db():
 # Database connection helper
 def get_db():
     try:
-        conn = psycopg.connect(DATABASE_URL)
+        conn = psycopg2.connect(DATABASE_URL)
         return conn
     except Exception as e:
         print(f"Error connecting to database: {e}")
@@ -108,7 +108,7 @@ def get_db():
 
 # Email validation function
 def is_valid_email(email):
-    pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    pattern = r'^[a-zA-Z00-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
     return re.match(pattern, email) is not None
 
 # Debug route to check database contents (remove in production)
