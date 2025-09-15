@@ -49,3 +49,24 @@ body { font-family: Arial, sans-serif; background: #f5f5f5; margin:0; padding:0;
 @media (max-width: 800px) {
   .data-table th, .data-table td { padding:8px 10px; font-size:13px; }
 }
+/* Style for all tables with class data-table */
+.data-table {
+  border-collapse: collapse;   /* removes double borders */
+  width: 100%;                 /* full width */
+  font-family: Arial, sans-serif;
+  font-size: 14px;
+}
+
+/* Apply border to the table, headers, and cells */
+.data-table th,
+.data-table td {
+  border: 1px solid #333;      /* dark border */
+  padding: 8px;                /* spacing inside cells */
+  text-align: left;            /* align text */
+}
+
+/* Optional: highlight header */
+.data-table th {
+  background-color: #f2f2f2;
+}
+
