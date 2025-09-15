@@ -3,8 +3,8 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timezone
 import json
 import time
-import psycopg
-from psycopg import sql
+import psycopg2 as psycopg
+from psycopg2 import sql
 import os
 import re
 from pathlib import Path
